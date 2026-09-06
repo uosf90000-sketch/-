@@ -1,5 +1,3 @@
-import { demoElements } from "@/lib/design";
-
 function responseText(payload:any){
   if(typeof payload?.output_text==="string") return payload.output_text;
   const chunks:string[]=[];
@@ -10,7 +8,13 @@ function responseText(payload:any){
 export async function POST(request:Request){
   const input=await request.json().catch(()=>({}));
   const key=process.env.OPENAI_API_KEY;
-  if(!key) return Response.json({ok:true,provider:"demo",design:{style:input.style||"عصري دافئ",elements:demoElements},note:"Add OPENAI_API_KEY on Railway to enable the AI interior designer."});
+  if(!key){
+    return Response.json({
+      ok:false,
+      code:"OPENAI_NOT_CONFIGURED",
+      error:"OpenAI API غير مربوط حتى الآن. لن يتم إنشاء تصميم داخلي وهمي."
+    },{status:503});
+  }
 
   const schema={
     type:"object",
@@ -25,13 +29,18 @@ export async function POST(request:Request){
     }
   };
 
-  const prompt=`أنت المصمم الداخلي لمنصة بيتي. صمم المنزل بالكامل بما يشمل الأثاث، البوية، البلاط، المطبخ، الحمامات، الأبواب، الشبابيك، التكييف، وتوزيع الإنارة. أعد قرارات قابلة للتحويل إلى مشهد 3D. بيانات المشروع: ${JSON.stringify(input)}`;
+  const prompt=`أنت المصمم الداخلي لمنصة بيتي. استخدم فقط بيانات المنزل الحقيقية المرسلة لك. صمم المنزل بالكامل بما يشمل الأثاث، البوية، البلاط، المطبخ، الحمامات، الأبواب، الشبابيك، التكييف، وتوزيع الإنارة. لا تخترع أبعادًا هندسية غير موجودة في البيانات. أعد قرارات قابلة للتحويل إلى مشهد 3D. بيانات المشروع: ${JSON.stringify(input)}`;
+
   try{
-    const r=await fetch("https://api.openai.com/v1/responses",{method:"POST",headers:{"content-type":"application/json","authorization":`Bearer ${key}`},body:JSON.stringify({
-      model:process.env.OPENAI_MODEL||"gpt-5.4",
-      input:prompt,
-      text:{format:{type:"json_schema",name:"bayti_interior_design",strict:true,schema}}
-    })});
+    const r=await fetch("https://api.openai.com/v1/responses",{
+      method:"POST",
+      headers:{"content-type":"application/json","authorization":`Bearer ${key}`},
+      body:JSON.stringify({
+        model:process.env.OPENAI_MODEL||"gpt-5.4",
+        input:prompt,
+        text:{format:{type:"json_schema",name:"bayti_interior_design",strict:true,schema}}
+      })
+    });
     const body=await r.json();
     if(!r.ok) return Response.json({ok:false,error:body?.error?.message||`OpenAI HTTP ${r.status}`},{status:502});
     const text=responseText(body);
