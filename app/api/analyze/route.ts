@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseIfc, ifcLengthToMeters, entitiesOfType } from "@/lib/ifc/parse";
 import { ifcToPlan } from "@/lib/ifc/to-plan";
+import { inferRoomsFromWalls } from "@/lib/geometry/infer-rooms";
 
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
@@ -188,6 +189,7 @@ export async function POST(request:Request){
     }
 
     const geometryReady=Boolean(ifcPlan&&Array.isArray(ifcPlan.walls)&&ifcPlan.walls.length>0);
+    const inferredRooms=geometryReady?inferRoomsFromWalls(ifcPlan.walls):[];
     const analysis={
       provider:"bimy",
       uploadId,
@@ -201,6 +203,8 @@ export async function POST(request:Request){
       ifc,
       ifcCounts,
       ifcPlan,
+      inferredRooms,
+      inferredRoomCount:inferredRooms.length,
       ifcError,
       updatedAt:new Date().toISOString()
     };
@@ -216,6 +220,7 @@ export async function POST(request:Request){
       scanStatus:status,
       scanCounts:scanSummary,
       ifcCounts,
+      inferredRoomCount:inferredRooms.length,
       ifc,
       ifcError,
       result:analysis
