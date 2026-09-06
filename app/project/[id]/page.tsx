@@ -26,9 +26,13 @@ export default function RealProjectPage(){
     if(!id)return;
     Promise.all([
       fetch(`/api/uploads/${id}`).then(r=>r.json()),
-      fetch("/api/health").then(r=>r.json())
-    ]).then(([body,health])=>{
+      fetch("/api/health").then(r=>r.json()),
+      fetch(`/api/uploads/${id}/analysis`).then(async r=>r.ok?await r.json():null)
+    ]).then(([body,health,saved])=>{
       if(body.ok)setUpload(body.upload);
+      if(saved?.ok&&saved?.analysis){
+        setAnalysis({ok:true,provider:"bimy",status:saved.analysis.status,result:saved.analysis});
+      }
       setIntegration({bimyConfigured:Boolean(health?.bimyConfigured),openaiConfigured:Boolean(health?.openaiConfigured)});
     }).finally(()=>setLoading(false));
   },[id]);
@@ -58,7 +62,7 @@ export default function RealProjectPage(){
     if(!analysis?.result)return;
     setDesigning(true);setDesignError("");setDesign(null);
     try{
-      const r=await fetch("/api/design",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({bim:analysis.result,style:"عصري دافئ"})});
+      const r=await fetch("/api/design",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({uploadId:upload?.id,bim:analysis.result,style:"عصري دافئ"})});
       const body=await r.json();
       if(!r.ok||!body.ok) throw new Error(body.error||"فشل التصميم");
       setDesign(body);
@@ -107,7 +111,7 @@ export default function RealProjectPage(){
 
         <div className="statusCard">
           <h3>OpenAI — المصمم الداخلي</h3>
-          <p>يعمل فقط بعد وصول بيانات BIM الحقيقية.</p>
+          <p>{analysis?.result?"نتيجة BIMy الحقيقية موجودة. يمكنك تشغيل المصمم الداخلي الآن.":"يعمل فقط بعد وصول بيانات BIM الحقيقية."}</p>
           <button className="btn gold wide" onClick={runDesign} disabled={!analysis?.result||designing||!integration?.openaiConfigured}>{designing?"جاري التصميم…":integration?.openaiConfigured?"تشغيل التصميم الداخلي":"بانتظار ربط OpenAI"}</button>
           {designError&&<div className="realError">{designError}</div>}
           {design&&<div className="realSuccess">✓ تم إنشاء التصميم بواسطة OpenAI.</div>}
