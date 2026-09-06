@@ -50,6 +50,8 @@ export async function GET(req:Request){
       scanStatus:analysis.scanStatus,
       scanCounts:analysis.scanCounts,
       ifcCounts:analysis.ifcCounts,
+      inferredRoomCount:analysis.inferredRoomCount??analysis?.result?.inferredRoomCount??null,
+      inferredRooms:Array.isArray(analysis?.result?.inferredRooms)?analysis.result.inferredRooms.map((r:any)=>({id:r.id,areaM2:r.areaM2,center:r.center})):[],
       ifc:analysis.ifc,
       ifcError:analysis.ifcError
     },
