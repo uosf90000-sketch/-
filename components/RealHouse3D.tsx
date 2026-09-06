@@ -167,6 +167,7 @@ export default function RealHouse3D({
   const items:DesignItem[]=Array.isArray(design?.design?.items)?design.design.items:[];
   const lights:DesignItem[]=Array.isArray(design?.design?.lighting)?design.design.lighting:[];
   const ac:DesignItem[]=Array.isArray(design?.design?.airConditioning)?design.design.airConditioning:[];
+  const inferredRooms=Array.isArray(analysis?.inferredRooms)?analysis.inferredRooms:[];
 
   const bounds=useMemo(()=>{
     let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
@@ -210,6 +211,19 @@ export default function RealHouse3D({
         <boxGeometry args={[Math.max(4,bounds.maxX-bounds.minX+2),.12,Math.max(4,bounds.maxY-bounds.minY+2)]}/>
         <meshStandardMaterial color="#c8bcae" roughness={.9}/>
       </mesh>
+
+      {inferredRooms.map((room:any,i:number)=>{
+        const points=Array.isArray(room?.polygon)?room.polygon:[];
+        if(points.length<3)return null;
+        const shape=new THREE.Shape();
+        shape.moveTo(Number(points[0].x),Number(points[0].y));
+        for(let j=1;j<points.length;j++)shape.lineTo(Number(points[j].x),Number(points[j].y));
+        shape.closePath();
+        return <mesh key={room.id||i} rotation={[-Math.PI/2,0,0]} position={[0,.015,0]} receiveShadow>
+          <shapeGeometry args={[shape]}/>
+          <meshStandardMaterial color={i%2===0?"#b9c5b7":"#c8bcae"} roughness={.95} side={THREE.DoubleSide}/>
+        </mesh>;
+      })}
 
       {walls.map((w:any)=><WallMesh key={w.entityId} wall={w} openings={openingByWall.get(w.entityId)||[]}/>)}
       {[...items,...lights,...ac].map((item,i)=>
