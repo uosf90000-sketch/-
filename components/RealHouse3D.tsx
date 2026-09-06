@@ -159,12 +159,25 @@ function CameraTour({enabled,center,size}:{enabled:boolean;center:THREE.Vector3;
 }
 
 export default function RealHouse3D({
-  analysis,design,mode="overview",autoplay=false,onSelect
+  analysis,design,detectedDoors=[],mode="overview",autoplay=false,onSelect
 }:{
-  analysis:any;design:any;mode?:"overview"|"tour";autoplay?:boolean;onSelect?:(i:DesignItem)=>void
+  analysis:any;design:any;detectedDoors?:any[];mode?:"overview"|"tour";autoplay?:boolean;onSelect?:(i:DesignItem)=>void
 }){
   const walls=Array.isArray(analysis?.ifcPlan?.walls)?analysis.ifcPlan.walls:[];
-  const openings=Array.isArray(analysis?.ifcPlan?.openings)?analysis.ifcPlan.openings:[];
+  const providerOpenings=Array.isArray(analysis?.ifcPlan?.openings)?analysis.ifcPlan.openings:[];
+  const openings=[
+    ...providerOpenings,
+    ...detectedDoors.map((d:any)=>({
+      kind:"door",
+      wallEntityId:Number(d.wallEntityId),
+      position:Number(d.position),
+      widthM:Number(d.widthM)||.9,
+      heightM:2.1,
+      sillM:0,
+      confidence:Number(d.confidence)||.6,
+      source:"bayti-door-arc"
+    }))
+  ];
   const items:DesignItem[]=Array.isArray(design?.design?.items)?design.design.items:[];
   const lights:DesignItem[]=Array.isArray(design?.design?.lighting)?design.design.lighting:[];
   const ac:DesignItem[]=Array.isArray(design?.design?.airConditioning)?design.design.airConditioning:[];
