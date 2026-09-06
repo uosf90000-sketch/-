@@ -82,8 +82,8 @@ function WallMesh({wall,openings}:{wall:any;openings:any[]}){
           <boxGeometry args={[Math.max(.5,o.end-o.start),openH,Math.max(.025,thick*.18)]}/>
           <meshPhysicalMaterial
             color={o.kind==="window"?"#8eb9c7":"#6f5847"}
-            transparent={o.kind==="window"} opacity={o.kind==="window"?.28:1}
-            transmission={o.kind==="window"?.55:0} roughness={o.kind==="window"?.18:.65}
+            transparent={o.kind==="window"} opacity={o.kind==="window" ? .28 : 1}
+            transmission={o.kind==="window" ? .55 : 0} roughness={o.kind==="window" ? .18 : .65}
           />
         </mesh>
       </group>;
