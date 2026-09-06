@@ -35,6 +35,7 @@ export async function GET(){
     bimyBaseUrl:baseUrl,
     bimyConfigured:token,
     bimyIntegrationPending:!token,
-    openaiConfigured:Boolean(process.env.OPENAI_API_KEY)
+    openaiConfigured:Boolean(process.env.OPENAI_API_KEY),
+    aiStageEnabled:process.env.BAYTI_AI_STAGE_ENABLED==="true"
   });
 }
