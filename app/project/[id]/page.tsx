@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import Header from "@/components/Header";
@@ -31,25 +31,21 @@ export default function RealProjectPage(){
   useEffect(()=>{
     if(!id)return;
     Promise.all([
-      fetch(`/api/uploads/${id}`).then(r=>r.json()),
+      fetch("/api/uploads/"+id).then(r=>r.json()),
       fetch("/api/health").then(r=>r.json()),
-      fetch(`/api/uploads/${id}/analysis`).then(async r=>r.ok?await r.json():null),
-      fetch(`/api/uploads/${id}/rooms`).then(async r=>r.ok?await r.json():null),
-      fetch(`/api/uploads/${id}/design`).then(async r=>r.ok?await r.json():null)
+      fetch("/api/uploads/"+id+"/analysis").then(async r=>r.ok?await r.json():null),
+      fetch("/api/uploads/"+id+"/rooms").then(async r=>r.ok?await r.json():null),
+      fetch("/api/uploads/"+id+"/design").then(async r=>r.ok?await r.json():null)
     ]).then(([body,health,saved,roomSaved,designSaved])=>{
       if(body.ok)setUpload(body.upload);
-      if(saved?.ok&&saved?.analysis){
-        setAnalysis({ok:true,provider:"bimy",status:saved.analysis.status,result:saved.analysis});
-      }
-      if(roomSaved?.ok&&Array.isArray(roomSaved?.rooms?.rooms)){
-        setRoomsData(roomSaved.rooms.rooms);
-        setRoomsAttempted(true);
-      }
-      if(designSaved?.ok&&designSaved?.design){
-        setDesign(designSaved.design);
-        setAutoDesignAttempted(true);
-      }
-      setIntegration({bimyConfigured:Boolean(health?.bimyConfigured),openaiConfigured:Boolean(health?.openaiConfigured),aiStageEnabled:Boolean(health?.aiStageEnabled)});
+      if(saved?.ok&&saved?.analysis)setAnalysis({ok:true,provider:"bimy",status:saved.analysis.status,result:saved.analysis});
+      if(roomSaved?.ok&&Array.isArray(roomSaved?.rooms?.rooms)){setRoomsData(roomSaved.rooms.rooms);setRoomsAttempted(true)}
+      if(designSaved?.ok&&designSaved?.design){setDesign(designSaved.design);setAutoDesignAttempted(true)}
+      setIntegration({
+        bimyConfigured:Boolean(health?.bimyConfigured),
+        openaiConfigured:Boolean(health?.openaiConfigured),
+        aiStageEnabled:Boolean(health?.aiStageEnabled)
+      });
     }).finally(()=>setLoading(false));
   },[id]);
 
@@ -59,44 +55,29 @@ export default function RealProjectPage(){
     try{
       const r=await fetch("/api/rooms",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({uploadId:upload.id})});
       const body=await r.json();
-      if(r.ok&&body.ok&&Array.isArray(body.rooms)) setRoomsData(body.rooms);
-    }finally{
-      setRoomsBusy(false);
-      setRoomsAttempted(true);
-    }
+      if(r.ok&&body.ok&&Array.isArray(body.rooms))setRoomsData(body.rooms);
+    }finally{setRoomsBusy(false);setRoomsAttempted(true)}
   }
 
   useEffect(()=>{
-    const scanReady=analysis?.result?.scan?.project?.scanStatus==="ready" || analysis?.result?.scanStatus==="ready";
-    if(upload&&integration?.openaiConfigured&&integration?.aiStageEnabled&&scanReady&&!roomsAttempted&&!roomsBusy){
-      void detectRooms();
-    }
+    const scanReady=analysis?.result?.scan?.project?.scanStatus==="ready"||analysis?.result?.scanStatus==="ready";
+    if(upload&&integration?.openaiConfigured&&integration?.aiStageEnabled&&scanReady&&!roomsAttempted&&!roomsBusy)void detectRooms();
   },[upload,analysis,integration,roomsAttempted,roomsBusy]);
 
   useEffect(()=>{
-    const scanReady=analysis?.result?.scan?.project?.scanStatus==="ready" || analysis?.result?.scanStatus==="ready";
+    const scanReady=analysis?.result?.scan?.project?.scanStatus==="ready"||analysis?.result?.scanStatus==="ready";
     const hasIfc=Array.isArray(analysis?.result?.ifcPlan?.walls)&&analysis.result.ifcPlan.walls.length>0;
     if(upload&&integration?.bimyConfigured&&scanReady&&!hasIfc&&!analyzing&&!autoBimyAttempted){
-      setAutoBimyAttempted(true);
-      void runAnalysis();
+      setAutoBimyAttempted(true);void runAnalysis();
     }
   },[upload,analysis,integration,analyzing,autoBimyAttempted]);
 
   useEffect(()=>{
     const hasIfc=Array.isArray(analysis?.result?.ifcPlan?.walls)&&analysis.result.ifcPlan.walls.length>0;
     if(upload&&integration?.openaiConfigured&&integration?.aiStageEnabled&&hasIfc&&roomsData.length>0&&!design&&!designing&&!autoDesignAttempted){
-      setAutoDesignAttempted(true);
-      void runDesign();
+      setAutoDesignAttempted(true);void runDesign();
     }
   },[upload,analysis,integration,roomsData,design,designing,autoDesignAttempted]);
-
-  const preview=useMemo(()=>{
-    if(!upload)return null;
-    const url=`/api/uploads/${upload.id}/file`;
-    if(["jpg","jpeg","png","webp"].includes(upload.extension)) return <img className="realPlanImage" src={url} alt={upload.name}/>;
-    if(upload.extension==="pdf") return <iframe className="realPlanPdf" src={url} title={upload.name}/>;
-    return <div className="noPreview"><b>{upload.extension.toUpperCase()}</b><p>تم حفظ الملف فعليًا. المعاينة البصرية لهذه الصيغة ستظهر بعد تحويلها عبر BIMy.</p><a className="btn ghost" href={url}>فتح الملف الأصلي</a></div>;
-  },[upload]);
 
   async function runAnalysis(){
     if(!upload)return;
@@ -105,11 +86,10 @@ export default function RealProjectPage(){
       await fetch("/api/bimy/recover",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({uploadId:upload.id})});
       const r=await fetch("/api/analyze",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({uploadId:upload.id})});
       const body=await r.json();
-      if(!r.ok||!body.ok) throw new Error(body.error||"فشل تحليل BIMy");
-      setAnalysis(body);
-      setRoomsAttempted(false);
-    }catch(e){setAnalysisError(e instanceof Error?e.message:"فشل تحليل BIMy");}
-    finally{setAnalyzing(false);}
+      if(!r.ok||!body.ok)throw new Error(body.error||"فشل تحليل BIMy");
+      setAnalysis(body);setRoomsAttempted(false);
+    }catch(e){setAnalysisError(e instanceof Error?e.message:"فشل تحليل BIMy")}
+    finally{setAnalyzing(false)}
   }
 
   async function runDesign(){
@@ -118,80 +98,111 @@ export default function RealProjectPage(){
     try{
       const r=await fetch("/api/design",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({uploadId:upload?.id,bim:analysis.result,style:"عصري دافئ"})});
       const body=await r.json();
-      if(!r.ok||!body.ok) throw new Error(body.error||"فشل التصميم");
+      if(!r.ok||!body.ok)throw new Error(body.error||"فشل التصميم");
       setDesign(body);
-    }catch(e){setDesignError(e instanceof Error?e.message:"فشل التصميم");}
-    finally{setDesigning(false);}
+    }catch(e){setDesignError(e instanceof Error?e.message:"فشل التصميم")}
+    finally{setDesigning(false)}
   }
 
-  if(loading)return <main><Header/><div className="realProjectLoading">جاري فتح المشروع…</div></main>;
-  if(!upload)return <main><Header/><div className="realProjectLoading">المخطط غير موجود.</div></main>;
+  if(loading)return <main><Header/><div className="studioPageLoading">جاري تجهيز الاستوديو…</div></main>;
+  if(!upload)return <main><Header/><div className="studioPageLoading">المشروع غير موجود.</div></main>;
 
-  return <main className="realProject">
+  const result=analysis?.result;
+  const wallCount=result?.ifcPlan?.walls?.length||result?.scanCounts?.walls||0;
+  const windowCount=(result?.ifcPlan?.openings||[]).filter((o:any)=>o.kind==="window").length||result?.scanCounts?.windows||0;
+  const roomCount=result?.inferredRooms?.length||roomsData.length||0;
+  const hasIfc=wallCount>0;
+
+  return <main className="projectStudio">
     <Header/>
-    <section className="realProjectHead">
-      <div><span className="kicker">مشروع حقيقي</span><h1>{upload.name}</h1><p>تم الرفع {new Date(upload.uploadedAt).toLocaleString("ar-SA")} · {(upload.size/1024/1024).toFixed(2)} MB</p></div>
-      <Link className="btn ghost" href="/">رفع مخطط آخر</Link>
+
+    <section className="projectStudioHero">
+      <div className="projectTitleBlock">
+        <div className="projectEyebrow"><span className="projectStatusDot"/> مشروع قيد التصميم</div>
+        <h1>{upload.name}</h1>
+        <p>{(upload.size/1024/1024).toFixed(2)} MB · {new Date(upload.uploadedAt).toLocaleDateString("ar-SA")} · هندسة BIMy/IFC</p>
+      </div>
+
+      <div className="projectHeroActions">
+        <Link href="/" className="studioSecondaryBtn">مخطط جديد</Link>
+        {hasIfc&&<Link href={"/project/"+upload.id+"/3d"} className="studioPrimaryBtn">
+          <span>فتح الاستوديو 3D</span>
+          <b>←</b>
+        </Link>}
+      </div>
     </section>
 
-    <section className="realPipeline">
-      <div className="stage ready"><span>✓</span><b>رفع وحفظ المخطط</b><small>مكتمل فعليًا</small></div>
-      <div className={analysis?"stage ready":"stage"}><span>{analysis?"✓":"2"}</span><b>تحليل BIMy</b><small>{analysis?"تم من BIMy":integration?.bimyConfigured?"جاهز للتشغيل":"بانتظار تفعيل التكامل"}</small></div>
-      <div className={design?"stage ready":"stage"}><span>{design?"✓":"3"}</span><b>التصميم الداخلي</b><small>{design?"تم من OpenAI":"بعد اكتمال BIMy"}</small></div>
-      <div className={analysis?.result?.ifcPlan?.walls?.length?"stage ready":"stage"}><span>{analysis?.result?.ifcPlan?.walls?.length?"✓":"4"}</span><b>3D الحقيقي</b><small>{analysis?.result?.ifcPlan?.walls?.length?"هندسة IFC جاهزة":"يبنى من هندسة BIM"}</small></div>
-      <div className={design?.design&&analysis?.result?.ifcPlan?.walls?.length?"stage ready":"stage"}><span>{design?.design&&analysis?.result?.ifcPlan?.walls?.length?"✓":"5"}</span><b>الجولة التفاعلية</b><small>{design?.design&&analysis?.result?.ifcPlan?.walls?.length?"جاهزة للفتح":"بعد اكتمال 3D"}</small></div>
+    <section className="projectPulse">
+      <div className="pulseStep done"><i>✓</i><span><b>المخطط</b><small>محفوظ</small></span></div>
+      <em/>
+      <div className={analysis?"pulseStep done":"pulseStep active"}><i>{analysis?"✓":"2"}</i><span><b>الهندسة</b><small>{analysis?"BIMy + IFC":"جاري التحليل"}</small></span></div>
+      <em/>
+      <div className={hasIfc?"pulseStep done":"pulseStep"}><i>{hasIfc?"✓":"3"}</i><span><b>3D</b><small>{hasIfc?"جاهز للمعاينة":"بانتظار الهندسة"}</small></span></div>
+      <em/>
+      <div className={design?"pulseStep done":"pulseStep"}><i>{design?"✓":"4"}</i><span><b>التصميم الداخلي</b><small>{design?"مصمم":"موقوف مؤقتًا"}</small></span></div>
     </section>
 
-    <section className="realProjectGrid">
-      <div>
-        {analysis?.result ? (
+    <section className="projectBento">
+      <div className="projectCanvasCard">
+        <div className="cardSectionHead">
+          <div><span>قراءة المخطط</span><h2>الهندسة التي سيُبنى عليها التصميم</h2></div>
+          <div className="geometryBadge"><i/> LIVE GEOMETRY</div>
+        </div>
+
+        {result?(
           <PlanReading
-            imageUrl={`/api/uploads/${upload.id}/file`}
-            analysis={analysis.result}
+            imageUrl={"/api/uploads/"+upload.id+"/file"}
+            analysis={result}
             rooms={roomsData}
             uploadId={upload.id}
           />
-        ) : (
-          <div className="realPreviewCard">
-            <div className="cardHead"><div><b>المخطط الأصلي</b><small>الملف المحفوظ على Railway</small></div><a href={`/api/uploads/${upload.id}/file`} className="btn ghost">فتح الأصلي</a></div>
-            <div className="realPreview">{preview}</div>
+        ):(
+          <div className="projectEmptyState">
+            <div className="emptyPlanIcon">⌗</div>
+            <h3>المخطط محفوظ وجاهز للتحليل</h3>
+            <p>شغّل BIMy لاستخراج الجدران والفتحات والمقياس.</p>
+            <button className="studioPrimaryBtn" onClick={runAnalysis} disabled={analyzing||!integration?.bimyConfigured}>
+              {analyzing?"جاري التحليل…":"تحليل المخطط"}
+            </button>
           </div>
         )}
-        {analysis?.result&&roomsBusy&&<div className="roomsReadingNotice">جاري تحديد الغرف وأسمائها من المخطط الحقيقي…</div>}
       </div>
 
-      <aside className="realStatus">
-        <div className="statusCard good"><h3>رفع الملف</h3><p>تم الحفظ على تخزين دائم، وليس ملفًا مؤقتًا.</p><b>✓ مكتمل</b></div>
+      <aside className="projectSideRail">
+        <div className="metricCard21 metricPrimary">
+          <div className="metricTop"><span>الهندسة</span><i className={hasIfc?"ok":""}/></div>
+          <strong>{hasIfc?"جاهزة":"قيد التحليل"}</strong>
+          <p>{wallCount} جدار · {windowCount} نافذة · {roomCount} فراغ</p>
+          <div className="metricBar"><span style={{width:hasIfc?"100%":analysis?"72%":"28%"}}/></div>
+        </div>
 
-        <div className="statusCard">
-          <h3>BIMy</h3>
-          <p>{integration?.bimyConfigured
-            ?"التكامل جاهز. عند التشغيل سيرسل بيتي المخطط الحقيقي إلى BIMy."
-            :"تم حفظ المخطط. تكامل BIMy المباشر ما زال بانتظار التفعيل الرسمي، ولن نطلب منك عنوان API غير متوفر لديك."}</p>
-          <button className="btn gold wide" onClick={runAnalysis} disabled={analyzing||!integration?.bimyConfigured}>
-            {analyzing?"جاري إرسال المخطط إلى BIMy…":integration?.bimyConfigured?"تشغيل تحليل BIMy":"بانتظار تفعيل BIMy"}
+        <div className="metricGrid21">
+          <div className="metricCard21 small"><span>الجدران</span><strong>{wallCount}</strong><small>IFC walls</small></div>
+          <div className="metricCard21 small"><span>الفراغات</span><strong>{roomCount}</strong><small>Topology</small></div>
+          <div className="metricCard21 small"><span>النوافذ</span><strong>{windowCount}</strong><small>Openings</small></div>
+          <div className="metricCard21 small"><span>المقياس</span><strong>{result?.scan?.project?.scanScale?.confidence?Math.round(result.scan.project.scanScale.confidence*100)+"%":"—"}</strong><small>Confidence</small></div>
+        </div>
+
+        <div className="actionCard21">
+          <div className="actionIcon">◇</div>
+          <span>استوديو 3D</span>
+          <h3>تحقق من البيت بالحجم والفراغ الحقيقي.</h3>
+          <p>منظور علوي، مستوى العين، وجولة تلقائية. بدون OpenAI.</p>
+          {hasIfc?<Link className="studioPrimaryBtn wide" href={"/project/"+upload.id+"/3d"}>فتح 3D <b>←</b></Link>:<button className="studioPrimaryBtn wide" disabled>بانتظار IFC</button>}
+        </div>
+
+        <div className="actionCard21 aiCard">
+          <div className="actionIcon">✦</div>
+          <div className="lockRow"><span>المصمم الداخلي</span><small>{integration?.aiStageEnabled?"متاح":"موقوف للتحقق"}</small></div>
+          <h3>الأثاث، المواد، الإنارة والتكييف.</h3>
+          <p>{integration?.aiStageEnabled?"جاهز للعمل من بيانات الهندسة الحالية.":"سنفعّله بعد اعتماد الأبواب والـ3D الهندسي."}</p>
+          <button className="studioSecondaryBtn wide" onClick={runDesign} disabled={!result||designing||!integration?.aiStageEnabled}>
+            {designing?"جاري التصميم…":design?"إعادة التصميم":"تشغيل لاحقًا"}
           </button>
-          {analysisError&&<div className="realError">{analysisError}</div>}
-          {analysis&&<div className="realSuccess">✓ وصلت قراءة BIMy الحقيقية. {analysis?.result?.scanCounts?.walls??analysis?.result?.scan?.project?.scanProgress?.counts?.walls??0} جدار · {analysis?.result?.scanCounts?.doors??analysis?.result?.scan?.project?.scanProgress?.counts?.doors??0} باب · {analysis?.result?.scanCounts?.windows??analysis?.result?.scan?.project?.scanProgress?.counts?.windows??0} نافذة.</div>}
         </div>
 
-        <div className="statusCard">
-          <h3>OpenAI — المصمم الداخلي</h3>
-          <p>{!integration?.aiStageEnabled?"مرحلة OpenAI موقوفة مؤقتًا إلى أن نعتمد المسار الهندسي بالكامل.":analysis?.result?"نتيجة BIMy الحقيقية موجودة. يمكنك تشغيل المصمم الداخلي الآن.":"يعمل فقط بعد وصول بيانات BIM الحقيقية."}</p>
-          <button className="btn gold wide" onClick={runDesign} disabled={!analysis?.result||designing||!integration?.openaiConfigured||!integration?.aiStageEnabled}>{designing?"جاري التصميم…":!integration?.aiStageEnabled?"موقوف حتى اعتماد المسار":integration?.openaiConfigured?"تشغيل التصميم الداخلي":"بانتظار ربط OpenAI"}</button>
-          {designError&&<div className="realError">{designError}</div>}
-          {design&&<div className="realSuccess">✓ تم إنشاء التصميم بواسطة OpenAI.</div>}
-        </div>
-
-        <div className="statusCard mutedCard">
-          <h3>3D</h3>
-          <p>{analysis?.result?.ifcPlan?.walls?.length
-            ?"تم استخراج هندسة IFC الحقيقية. يمكنك فتح 3D الهندسي الآن للتحقق من الجدران والفتحات والغرف قبل OpenAI."
-            :"بيتي يكمل استخراج IFC الحقيقي من BIMy، ولن يستخدم نموذج البيت التجريبي."}</p>
-          {analysis?.result?.ifcPlan?.walls?.length&&(
-            <Link className="btn gold wide" href={`/project/${upload.id}/3d`}>{design?.design?"فتح المنزل ثلاثي الأبعاد":"فتح 3D الهندسي"}</Link>
-          )}
-        </div>
+        {analysisError&&<div className="studioInlineError">{analysisError}</div>}
+        {designError&&<div className="studioInlineError">{designError}</div>}
       </aside>
     </section>
   </main>;
