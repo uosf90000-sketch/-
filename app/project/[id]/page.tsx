@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import Header from "@/components/Header";
+import PlanReading from "@/components/PlanReading";
 
 type UploadMeta={
   id:string;name:string;size:number;type:string;extension:string;uploadedAt:string;status:string;
@@ -21,21 +22,49 @@ export default function RealProjectPage(){
   const [designError,setDesignError]=useState("");
   const [designing,setDesigning]=useState(false);
   const [integration,setIntegration]=useState<{bimyConfigured:boolean;openaiConfigured:boolean}|null>(null);
+  const [roomsData,setRoomsData]=useState<any[]>([]);
+  const [roomsBusy,setRoomsBusy]=useState(false);
+  const [roomsAttempted,setRoomsAttempted]=useState(false);
 
   useEffect(()=>{
     if(!id)return;
     Promise.all([
       fetch(`/api/uploads/${id}`).then(r=>r.json()),
       fetch("/api/health").then(r=>r.json()),
-      fetch(`/api/uploads/${id}/analysis`).then(async r=>r.ok?await r.json():null)
-    ]).then(([body,health,saved])=>{
+      fetch(`/api/uploads/${id}/analysis`).then(async r=>r.ok?await r.json():null),
+      fetch(`/api/uploads/${id}/rooms`).then(async r=>r.ok?await r.json():null)
+    ]).then(([body,health,saved,roomSaved])=>{
       if(body.ok)setUpload(body.upload);
       if(saved?.ok&&saved?.analysis){
         setAnalysis({ok:true,provider:"bimy",status:saved.analysis.status,result:saved.analysis});
       }
+      if(roomSaved?.ok&&Array.isArray(roomSaved?.rooms?.rooms)){
+        setRoomsData(roomSaved.rooms.rooms);
+        setRoomsAttempted(true);
+      }
       setIntegration({bimyConfigured:Boolean(health?.bimyConfigured),openaiConfigured:Boolean(health?.openaiConfigured)});
     }).finally(()=>setLoading(false));
   },[id]);
+
+  async function detectRooms(){
+    if(!upload||roomsBusy)return;
+    setRoomsBusy(true);
+    try{
+      const r=await fetch("/api/rooms",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({uploadId:upload.id})});
+      const body=await r.json();
+      if(r.ok&&body.ok&&Array.isArray(body.rooms)) setRoomsData(body.rooms);
+    }finally{
+      setRoomsBusy(false);
+      setRoomsAttempted(true);
+    }
+  }
+
+  useEffect(()=>{
+    const scanReady=analysis?.result?.scan?.project?.scanStatus==="ready" || analysis?.result?.scanStatus==="ready";
+    if(upload&&integration?.openaiConfigured&&scanReady&&!roomsAttempted&&!roomsBusy){
+      void detectRooms();
+    }
+  },[upload,analysis,integration,roomsAttempted,roomsBusy]);
 
   const preview=useMemo(()=>{
     if(!upload)return null;
@@ -54,6 +83,7 @@ export default function RealProjectPage(){
       const body=await r.json();
       if(!r.ok||!body.ok) throw new Error(body.error||"فشل تحليل BIMy");
       setAnalysis(body);
+      setRoomsAttempted(false);
     }catch(e){setAnalysisError(e instanceof Error?e.message:"فشل تحليل BIMy");}
     finally{setAnalyzing(false);}
   }
@@ -89,9 +119,20 @@ export default function RealProjectPage(){
     </section>
 
     <section className="realProjectGrid">
-      <div className="realPreviewCard">
-        <div className="cardHead"><div><b>المخطط الأصلي</b><small>الملف المحفوظ على Railway</small></div><a href={`/api/uploads/${upload.id}/file`} className="btn ghost">فتح الأصلي</a></div>
-        <div className="realPreview">{preview}</div>
+      <div>
+        {analysis?.result ? (
+          <PlanReading
+            imageUrl={`/api/uploads/${upload.id}/file`}
+            analysis={analysis.result}
+            rooms={roomsData}
+          />
+        ) : (
+          <div className="realPreviewCard">
+            <div className="cardHead"><div><b>المخطط الأصلي</b><small>الملف المحفوظ على Railway</small></div><a href={`/api/uploads/${upload.id}/file`} className="btn ghost">فتح الأصلي</a></div>
+            <div className="realPreview">{preview}</div>
+          </div>
+        )}
+        {analysis?.result&&roomsBusy&&<div className="roomsReadingNotice">جاري تحديد الغرف وأسمائها من المخطط الحقيقي…</div>}
       </div>
 
       <aside className="realStatus">
@@ -106,7 +147,7 @@ export default function RealProjectPage(){
             {analyzing?"جاري إرسال المخطط إلى BIMy…":integration?.bimyConfigured?"تشغيل تحليل BIMy":"بانتظار تفعيل BIMy"}
           </button>
           {analysisError&&<div className="realError">{analysisError}</div>}
-          {analysis&&<div className="realSuccess">✓ رجعت نتيجة حقيقية من BIMy.</div>}
+          {analysis&&<div className="realSuccess">✓ وصلت قراءة BIMy الحقيقية. {analysis?.result?.scanCounts?.walls??analysis?.result?.scan?.project?.scanProgress?.counts?.walls??0} جدار · {analysis?.result?.scanCounts?.doors??analysis?.result?.scan?.project?.scanProgress?.counts?.doors??0} باب · {analysis?.result?.scanCounts?.windows??analysis?.result?.scan?.project?.scanProgress?.counts?.windows??0} نافذة.</div>}
         </div>
 
         <div className="statusCard">
