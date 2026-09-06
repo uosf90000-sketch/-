@@ -21,7 +21,8 @@ function wallTransform(w:any){
   return {length,angle,x,z};
 }
 
-function WallMesh({wall,openings}:{wall:any;openings:any[]}){
+function WallMesh({wall,openings,onSelect}:{wall:any;openings:any[];onSelect:(item:any)=>void}){
+  const [hovered,setHovered]=useState(false);
   const {length,angle,x,z}=wallTransform(wall);
   const h=Number(wall.heightM)||2.8;
   const thick=Math.max(.08,Number(wall.thickness)||.18);
@@ -55,9 +56,12 @@ function WallMesh({wall,openings}:{wall:any;openings:any[]}){
       const segLen=s.end-s.start;
       const center=(s.start+s.end)/2;
       const p=localToWorld(center,h/2);
-      return <mesh key={i} position={[p.x,p.y,p.z]} rotation={[0,angle,0]}>
+      return <mesh key={i} position={[p.x,p.y,p.z]} rotation={[0,angle,0]}
+        onPointerOver={(e)=>{e.stopPropagation();setHovered(true)}}
+        onPointerOut={()=>setHovered(false)}
+        onClick={(e)=>{e.stopPropagation();onSelect({type:"wall",category:"جدار",name:"جدار داخلي",entityId:wall.entityId,lengthM:length,heightM:h,thicknessM:thick,material:"تشطيب الجدار يحدد بعد التصميم",source:"BIMy / IFC"})}}>
         <boxGeometry args={[segLen,h,thick]}/>
-        <meshStandardMaterial color="#d8d0c4" roughness={.82}/>
+        <meshStandardMaterial color={hovered?"#c2a574":"#d7cfc3"} roughness={.82}/>
       </mesh>;
     })}
 
@@ -78,7 +82,10 @@ function WallMesh({wall,openings}:{wall:any;openings:any[]}){
           <boxGeometry args={[o.end-o.start,piece.height,thick]}/>
           <meshStandardMaterial color="#d8d0c4" roughness={.82}/>
         </mesh>)}
-        <mesh position={[p.x,sill+openH/2,p.z]} rotation={[0,angle,0]}>
+        <mesh position={[p.x,sill+openH/2,p.z]} rotation={[0,angle,0]}
+          onPointerOver={(e)=>{e.stopPropagation();setHovered(true)}}
+          onPointerOut={()=>setHovered(false)}
+          onClick={(e)=>{e.stopPropagation();onSelect({type:o.kind,category:o.kind==="window"?"نافذة":"باب",name:o.kind==="window"?"نافذة":"باب",widthM:o.end-o.start,heightM:openH,sillM:sill,confidence:o.confidence??null,source:o.source||"BIMy / Bayti Vision"})}}>
           <boxGeometry args={[Math.max(.5,o.end-o.start),openH,Math.max(.025,thick*.18)]}/>
           <meshStandardMaterial
             color={o.kind==="window"?"#8eb9c7":"#6f5847"}
@@ -161,7 +168,7 @@ function CameraTour({enabled,center,size}:{enabled:boolean;center:THREE.Vector3;
 export default function RealHouse3D({
   analysis,design,detectedDoors=[],mode="overview",autoplay=false,onSelect
 }:{
-  analysis:any;design:any;detectedDoors?:any[];mode?:"overview"|"tour";autoplay?:boolean;onSelect?:(i:DesignItem)=>void
+  analysis:any;design:any;detectedDoors?:any[];mode?:"overview"|"tour";autoplay?:boolean;onSelect?:(i:any)=>void
 }){
   const walls=Array.isArray(analysis?.ifcPlan?.walls)?analysis.ifcPlan.walls:[];
   const providerOpenings=Array.isArray(analysis?.ifcPlan?.openings)?analysis.ifcPlan.openings:[];
@@ -218,14 +225,15 @@ export default function RealHouse3D({
   return <div className={`real3dCanvas ${mode}`}>
     <Canvas
       camera={camera}
+      onPointerMissed={()=>onSelect?.(null)}
       dpr={[1,1.25]}
       gl={{antialias:true,alpha:false,powerPreference:"high-performance"}}
-      onCreated={({gl})=>gl.setClearColor("#d8d2c9")}
+      onCreated={({gl})=>gl.setClearColor("#d9d3ca")}
     >
-      <color attach="background" args={["#d8d2c9"]}/>
-      <fog attach="fog" args={["#d8d2c9",Math.max(18,size*1.2),Math.max(35,size*2.5)]}/>
-      <hemisphereLight intensity={1.25} color="#fff8e8" groundColor="#8a8177"/>
-      <directionalLight position={[cx+8,12,-cy+6]} intensity={1.65}/>
+      <color attach="background" args={["#d9d3ca"]}/>
+      <fog attach="fog" args={["#d9d3ca",Math.max(30,size*1.8),Math.max(58,size*3.6)]}/>
+      <hemisphereLight intensity={1.05} color="#fff9ee" groundColor="#7c7368"/>
+      <directionalLight position={[cx+8,12,-cy+6]} intensity={1.35}/>
       <mesh position={[cx,-.08,-cy]}>
         <boxGeometry args={[Math.max(4,bounds.maxX-bounds.minX+2),.12,Math.max(4,bounds.maxY-bounds.minY+2)]}/>
         <meshStandardMaterial color="#c8bcae" roughness={.9}/>
@@ -238,13 +246,14 @@ export default function RealHouse3D({
         shape.moveTo(Number(points[0].x),Number(points[0].y));
         for(let j=1;j<points.length;j++)shape.lineTo(Number(points[j].x),Number(points[j].y));
         shape.closePath();
-        return <mesh key={room.id||i} rotation={[-Math.PI/2,0,0]} position={[0,.015,0]}>
+        return <mesh key={room.id||i} rotation={[-Math.PI/2,0,0]} position={[0,.015,0]}
+          onClick={(e)=>{e.stopPropagation();onSelect?.({type:"floor",category:"أرضية / فراغ",name:"فراغ "+String(i+1),areaM2:Number(room.areaM2)||0,perimeterM:Number(room.perimeterM)||0,material:"البلاط والخامة تحدد بعد التصميم",source:"Bayti Topology"})}}>
           <shapeGeometry args={[shape]}/>
           <meshStandardMaterial color={i%2===0?"#b9c5b7":"#c8bcae"} roughness={.95} side={THREE.DoubleSide}/>
         </mesh>;
       })}
 
-      {walls.map((w:any)=><WallMesh key={w.entityId} wall={w} openings={openingByWall.get(w.entityId)||[]}/>)}
+      {walls.map((w:any)=><WallMesh key={w.entityId} wall={w} openings={openingByWall.get(w.entityId)||[]} onSelect={onSelect||(()=>{})}/>)}
       {[...items,...lights,...ac].map((item,i)=>
         <Furniture key={`${item.category}-${item.name}-${i}`} item={item} position={itemPos(item)} onSelect={onSelect||(()=>{})}/>)}
 
