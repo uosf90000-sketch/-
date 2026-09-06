@@ -16,8 +16,8 @@ export async function POST(request:Request){
   if(!url || !key){
     return Response.json({
       ok:false,
-      code:"BIMY_NOT_CONFIGURED",
-      error:"تم رفع المخطط فعليًا، لكن BIMy غير مربوط حتى الآن. أضف BIMY_API_KEY وعنوان الـ API الرسمي عندما يتوفر."
+      code:"BIMY_INTEGRATION_PENDING",
+      error:"المخطط محفوظ فعليًا. تكامل BIMy المباشر لم يُفعّل بعد لهذا المشروع؛ لا تحتاج لإدخال عنوان API غير متوفر لديك."
     },{status:503});
   }
 
