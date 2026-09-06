@@ -25,21 +25,27 @@ export async function GET(req:Request){
     return Response.json({ok:false,stage:"bimy",analysis},{status:502});
   }
 
-  const roomsRes=await rooms(new Request(new URL("/api/rooms",base),{
-    method:"POST",
-    headers:{"content-type":"application/json"},
-    body:JSON.stringify({uploadId:UPLOAD_ID})
-  }));
-  const roomResult=await jsonOf(roomsRes);
-
+  const aiEnabled=process.env.BAYTI_AI_STAGE_ENABLED==="true";
+  let roomsRes:Response|null=null;
+  let roomResult:any={ok:false,error:"AI_STAGE_DISABLED"};
   let designResult:any=null;
-  if(analysis?.result?.ifcPlan?.walls?.length>0 && roomsRes.ok && roomResult?.ok){
-    const designRes=await design(new Request(new URL("/api/design",base),{
+
+  if(aiEnabled){
+    roomsRes=await rooms(new Request(new URL("/api/rooms",base),{
       method:"POST",
       headers:{"content-type":"application/json"},
-      body:JSON.stringify({uploadId:UPLOAD_ID,bim:analysis.result,style:"عصري دافئ"})
+      body:JSON.stringify({uploadId:UPLOAD_ID})
     }));
-    designResult=await jsonOf(designRes);
+    roomResult=await jsonOf(roomsRes);
+
+    if(analysis?.result?.ifcPlan?.walls?.length>0 && roomsRes.ok && roomResult?.ok){
+      const designRes=await design(new Request(new URL("/api/design",base),{
+        method:"POST",
+        headers:{"content-type":"application/json"},
+        body:JSON.stringify({uploadId:UPLOAD_ID,bim:analysis.result,style:"عصري دافئ"})
+      }));
+      designResult=await jsonOf(designRes);
+    }
   }
 
   return Response.json({
@@ -56,7 +62,7 @@ export async function GET(req:Request){
       ifcError:analysis.ifcError
     },
     rooms:{
-      ok:roomsRes.ok&&roomResult?.ok,
+      ok:Boolean(roomsRes?.ok&&roomResult?.ok),
       count:Array.isArray(roomResult?.rooms)?roomResult.rooms.length:null,
       error:roomResult?.error||null
     },
