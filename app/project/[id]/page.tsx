@@ -25,6 +25,8 @@ export default function RealProjectPage(){
   const [roomsData,setRoomsData]=useState<any[]>([]);
   const [roomsBusy,setRoomsBusy]=useState(false);
   const [roomsAttempted,setRoomsAttempted]=useState(false);
+  const [autoBimyAttempted,setAutoBimyAttempted]=useState(false);
+  const [autoDesignAttempted,setAutoDesignAttempted]=useState(false);
 
   useEffect(()=>{
     if(!id)return;
@@ -32,8 +34,9 @@ export default function RealProjectPage(){
       fetch(`/api/uploads/${id}`).then(r=>r.json()),
       fetch("/api/health").then(r=>r.json()),
       fetch(`/api/uploads/${id}/analysis`).then(async r=>r.ok?await r.json():null),
-      fetch(`/api/uploads/${id}/rooms`).then(async r=>r.ok?await r.json():null)
-    ]).then(([body,health,saved,roomSaved])=>{
+      fetch(`/api/uploads/${id}/rooms`).then(async r=>r.ok?await r.json():null),
+      fetch(`/api/uploads/${id}/design`).then(async r=>r.ok?await r.json():null)
+    ]).then(([body,health,saved,roomSaved,designSaved])=>{
       if(body.ok)setUpload(body.upload);
       if(saved?.ok&&saved?.analysis){
         setAnalysis({ok:true,provider:"bimy",status:saved.analysis.status,result:saved.analysis});
@@ -41,6 +44,10 @@ export default function RealProjectPage(){
       if(roomSaved?.ok&&Array.isArray(roomSaved?.rooms?.rooms)){
         setRoomsData(roomSaved.rooms.rooms);
         setRoomsAttempted(true);
+      }
+      if(designSaved?.ok&&designSaved?.design){
+        setDesign(designSaved.design);
+        setAutoDesignAttempted(true);
       }
       setIntegration({bimyConfigured:Boolean(health?.bimyConfigured),openaiConfigured:Boolean(health?.openaiConfigured)});
     }).finally(()=>setLoading(false));
@@ -66,6 +73,23 @@ export default function RealProjectPage(){
     }
   },[upload,analysis,integration,roomsAttempted,roomsBusy]);
 
+  useEffect(()=>{
+    const scanReady=analysis?.result?.scan?.project?.scanStatus==="ready" || analysis?.result?.scanStatus==="ready";
+    const hasIfc=Array.isArray(analysis?.result?.ifcPlan?.walls)&&analysis.result.ifcPlan.walls.length>0;
+    if(upload&&integration?.bimyConfigured&&scanReady&&!hasIfc&&!analyzing&&!autoBimyAttempted){
+      setAutoBimyAttempted(true);
+      void runAnalysis();
+    }
+  },[upload,analysis,integration,analyzing,autoBimyAttempted]);
+
+  useEffect(()=>{
+    const hasIfc=Array.isArray(analysis?.result?.ifcPlan?.walls)&&analysis.result.ifcPlan.walls.length>0;
+    if(upload&&integration?.openaiConfigured&&hasIfc&&roomsData.length>0&&!design&&!designing&&!autoDesignAttempted){
+      setAutoDesignAttempted(true);
+      void runDesign();
+    }
+  },[upload,analysis,integration,roomsData,design,designing,autoDesignAttempted]);
+
   const preview=useMemo(()=>{
     if(!upload)return null;
     const url=`/api/uploads/${upload.id}/file`;
@@ -76,7 +100,7 @@ export default function RealProjectPage(){
 
   async function runAnalysis(){
     if(!upload)return;
-    setAnalyzing(true);setAnalysisError("");setAnalysis(null);
+    setAnalyzing(true);setAnalysisError("");
     try{
       await fetch("/api/bimy/recover",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({uploadId:upload.id})});
       const r=await fetch("/api/analyze",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({uploadId:upload.id})});
@@ -114,8 +138,8 @@ export default function RealProjectPage(){
       <div className="stage ready"><span>✓</span><b>رفع وحفظ المخطط</b><small>مكتمل فعليًا</small></div>
       <div className={analysis?"stage ready":"stage"}><span>{analysis?"✓":"2"}</span><b>تحليل BIMy</b><small>{analysis?"تم من BIMy":integration?.bimyConfigured?"جاهز للتشغيل":"بانتظار تفعيل التكامل"}</small></div>
       <div className={design?"stage ready":"stage"}><span>{design?"✓":"3"}</span><b>التصميم الداخلي</b><small>{design?"تم من OpenAI":"بعد اكتمال BIMy"}</small></div>
-      <div className="stage"><span>4</span><b>3D الحقيقي</b><small>يبنى من هندسة BIM</small></div>
-      <div className="stage"><span>5</span><b>الجولة التفاعلية</b><small>بعد اكتمال 3D</small></div>
+      <div className={analysis?.result?.ifcPlan?.walls?.length?"stage ready":"stage"}><span>{analysis?.result?.ifcPlan?.walls?.length?"✓":"4"}</span><b>3D الحقيقي</b><small>{analysis?.result?.ifcPlan?.walls?.length?"هندسة IFC جاهزة":"يبنى من هندسة BIM"}</small></div>
+      <div className={design?.design&&analysis?.result?.ifcPlan?.walls?.length?"stage ready":"stage"}><span>{design?.design&&analysis?.result?.ifcPlan?.walls?.length?"✓":"5"}</span><b>الجولة التفاعلية</b><small>{design?.design&&analysis?.result?.ifcPlan?.walls?.length?"جاهزة للفتح":"بعد اكتمال 3D"}</small></div>
     </section>
 
     <section className="realProjectGrid">
@@ -158,7 +182,15 @@ export default function RealProjectPage(){
           {design&&<div className="realSuccess">✓ تم إنشاء التصميم بواسطة OpenAI.</div>}
         </div>
 
-        <div className="statusCard mutedCard"><h3>3D</h3><p>لن أستخدم نموذج البيت التجريبي لهذا المشروع. عند توفر هندسة BIMy سأحوّلها إلى المشهد ثلاثي الأبعاد الحقيقي، ثم نضيف الأثاث والتشطيبات.</p></div>
+        <div className="statusCard mutedCard">
+          <h3>3D</h3>
+          <p>{analysis?.result?.ifcPlan?.walls?.length
+            ?"تم استخراج هندسة IFC الحقيقية. عند اكتمال تصميم OpenAI يمكنك فتح المنزل المفروش."
+            :"بيتي يكمل استخراج IFC الحقيقي من BIMy، ولن يستخدم نموذج البيت التجريبي."}</p>
+          {analysis?.result?.ifcPlan?.walls?.length&&design?.design&&(
+            <Link className="btn gold wide" href={`/project/${upload.id}/3d`}>فتح المنزل ثلاثي الأبعاد</Link>
+          )}
+        </div>
       </aside>
     </section>
   </main>;
