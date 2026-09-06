@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { detectDoorsFromAlignedRaster, type DetectedDoor } from "@/lib/client/detect-doors";
 
 type RoomBox={
   name:string;
@@ -138,11 +139,13 @@ function autoAlign(
 export default function PlanReading({
   imageUrl,
   analysis,
-  rooms
+  rooms,
+  uploadId
 }:{
   imageUrl:string;
   analysis:any;
   rooms:RoomBox[];
+  uploadId:string;
 }){
   const scanProject=analysis?.scan?.project||{};
   const scale=scanProject?.scanScale||{};
@@ -157,11 +160,14 @@ export default function PlanReading({
   const [alignment,setAlignment]=useState<Alignment|null>(null);
   const [aligning,setAligning]=useState(walls.length>0);
   const [alignError,setAlignError]=useState(false);
+  const [detectedDoors,setDetectedDoors]=useState<DetectedDoor[]>([]);
+  const [detectingDoors,setDetectingDoors]=useState(false);
 
   const imageWidth=rasterSize?.width||num(scale.imageWidth)||1000;
   const imageHeight=rasterSize?.height||num(scale.imageHeight)||1400;
 
-  const doorCount=openings.filter((o:any)=>o.kind==="door").length || num(ifcCounts.doors) || num(scanCounts.doors);
+  const providerDoorCount=openings.filter((o:any)=>o.kind==="door").length || num(ifcCounts.doors) || num(scanCounts.doors);
+  const doorCount=Math.max(providerDoorCount,detectedDoors.length);
   const windowCount=openings.filter((o:any)=>o.kind==="window").length || num(ifcCounts.windows) || num(scanCounts.windows);
   const wallCount=walls.length || num(ifcCounts.walls) || num(scanCounts.walls);
   const roomCount=rooms.length || inferredRooms.length || num(ifcCounts.spaces);
@@ -174,6 +180,17 @@ export default function PlanReading({
     }
     return {minX,minY,maxX,maxY,valid:walls.length>0&&Number.isFinite(minX)&&maxX>minX&&maxY>minY};
   },[walls]);
+
+  useEffect(()=>{
+    if(!uploadId)return;
+    fetch(`/api/uploads/${uploadId}/doors`)
+      .then(async r=>r.ok?await r.json():null)
+      .then(body=>{
+        const saved=body?.doors?.doors;
+        if(Array.isArray(saved))setDetectedDoors(saved);
+      })
+      .catch(()=>{});
+  },[uploadId]);
 
   useEffect(()=>{
     let cancelled=false;
@@ -209,6 +226,36 @@ export default function PlanReading({
         if(result){
           setAlignment(result);
           try{localStorage.setItem("bayti-overlay-v3:"+imageUrl,JSON.stringify(result))}catch{}
+
+          setDetectingDoors(true);
+          try{
+            const doors=detectDoorsFromAlignedRaster({
+              pixels,
+              width:w,
+              height:h,
+              alignment:result,
+              bounds:{
+                minX:bounds.minX,
+                minY:bounds.minY,
+                maxX:bounds.maxX,
+                maxY:bounds.maxY
+              },
+              walls,
+              knownOpenings:openings
+            });
+            if(!cancelled){
+              setDetectedDoors(doors);
+              if(uploadId){
+                void fetch(`/api/uploads/${uploadId}/doors`,{
+                  method:"POST",
+                  headers:{"content-type":"application/json"},
+                  body:JSON.stringify({doors})
+                }).catch(()=>{});
+              }
+            }
+          }finally{
+            if(!cancelled)setDetectingDoors(false);
+          }
         }else{
           setAlignError(true);
         }
@@ -227,7 +274,7 @@ export default function PlanReading({
     }catch{}
 
     return()=>{cancelled=true};
-  },[imageUrl,walls,bounds.valid,bounds.minX,bounds.minY,bounds.maxX,bounds.maxY,scale.imageWidth,scale.imageHeight]);
+  },[imageUrl,uploadId,walls,openings,bounds.valid,bounds.minX,bounds.minY,bounds.maxX,bounds.maxY,scale.imageWidth,scale.imageHeight]);
 
   const hasIfc=bounds.valid;
   const active=alignment;
@@ -318,9 +365,23 @@ export default function PlanReading({
           const radius=Math.max(4,imageWidth*.006);
           return <circle key={i} cx={tx(x)} cy={ty(y)} r={radius} fill={color} stroke="#fff" strokeWidth={1.5}/>;
         })}
+
+        {active&&hasIfc&&detectedDoors.map((door:any,i:number)=>{
+          const host=wallById.get(Number(door.wallEntityId));
+          if(!host)return null;
+          const t=Math.max(0,Math.min(1,num(door.position)));
+          const x=num(host.x1)+(num(host.x2)-num(host.x1))*t;
+          const y=num(host.y1)+(num(host.y2)-num(host.y1))*t;
+          const r=Math.max(5,imageWidth*.007);
+          return <g key={`door-${door.wallEntityId}-${i}`}>
+            <circle cx={tx(x)} cy={ty(y)} r={r} fill="#f1d28f" stroke="#3b3023" strokeWidth={1.5}/>
+            <text x={tx(x)} y={ty(y)+4} textAnchor="middle" fill="#33281c" fontSize={Math.max(9,r*.95)} fontWeight="800">D</text>
+          </g>;
+        })}
       </svg>
 
       {aligning&&<div className="overlayAlignNotice">جارٍ مطابقة الجدران مع صورة المخطط…</div>}
+      {detectingDoors&&!aligning&&<div className="overlayAlignNotice">جارٍ قراءة أقواس الأبواب من المخطط…</div>}
       {alignError&&<div className="overlayAlignNotice error">لم أعرض خطوطًا مزيوطة. المحاذاة الآلية لم تتجاوز حد الثقة.</div>}
     </div>
 
@@ -335,7 +396,8 @@ export default function PlanReading({
       <span>المقياس: {scale?.metresPerPixel?Number(scale.metresPerPixel).toFixed(4)+" م/بكسل":"غير متوفر"}</span>
       <span>الثقة BIMy: {typeof scale?.confidence==="number"?Math.round(scale.confidence*100)+"%":"—"}</span>
       <span>المحاذاة: {active?Math.round(active.score/255*100)+"%":"—"}</span>
-      <span>المصدر الهندسي: BIMy/IFC</span>
+      <span>الأبواب البصرية: {detectedDoors.length}</span>
+      <span>المصدر الهندسي: BIMy/IFC + Bayti Vision</span>
     </div>
   </section>;
 }
