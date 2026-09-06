@@ -149,6 +149,7 @@ export default function RealProjectPage(){
             imageUrl={`/api/uploads/${upload.id}/file`}
             analysis={analysis.result}
             rooms={roomsData}
+            uploadId={upload.id}
           />
         ) : (
           <div className="realPreviewCard">
