@@ -97,7 +97,7 @@ export default function PlanReading({
             stroke="#69c7ee" strokeWidth={width} strokeLinecap="square"/>;
         })}
 
-        {hasIfc&&openings.map((opening:any,i)=>{
+        {hasIfc&&openings.map((opening:any,i:number)=>{
           const host=wallById.get(opening.wallEntityId);
           if(!host)return null;
           const t=Math.max(0,Math.min(1,num(opening.position)));
