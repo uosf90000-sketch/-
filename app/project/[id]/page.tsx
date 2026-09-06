@@ -45,6 +45,7 @@ export default function RealProjectPage(){
     if(!upload)return;
     setAnalyzing(true);setAnalysisError("");setAnalysis(null);
     try{
+      await fetch("/api/bimy/recover",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({uploadId:upload.id})});
       const r=await fetch("/api/analyze",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({uploadId:upload.id})});
       const body=await r.json();
       if(!r.ok||!body.ok) throw new Error(body.error||"فشل تحليل BIMy");
