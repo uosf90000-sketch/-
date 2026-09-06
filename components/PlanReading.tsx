@@ -27,11 +27,12 @@ export default function PlanReading({
   const openings=Array.isArray(plan?.openings)?plan.openings:[];
   const scanCounts=analysis?.scanCounts||scanProject?.scanProgress?.counts||{};
   const ifcCounts=analysis?.ifcCounts||{};
+  const inferredRooms=Array.isArray(analysis?.inferredRooms)?analysis.inferredRooms:[];
 
   const doorCount=openings.filter((o:any)=>o.kind==="door").length || num(ifcCounts.doors) || num(scanCounts.doors);
   const windowCount=openings.filter((o:any)=>o.kind==="window").length || num(ifcCounts.windows) || num(scanCounts.windows);
   const wallCount=walls.length || num(ifcCounts.walls) || num(scanCounts.walls);
-  const roomCount=rooms.length || num(ifcCounts.spaces);
+  const roomCount=rooms.length || inferredRooms.length || num(ifcCounts.spaces);
 
   let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
   for(const w of walls){
@@ -75,6 +76,21 @@ export default function PlanReading({
       <svg viewBox={`0 0 ${imageWidth} ${imageHeight}`} className="planOverlaySvg" preserveAspectRatio="xMidYMid meet">
         <image href={imageUrl} x="0" y="0" width={imageWidth} height={imageHeight} opacity="0.58"/>
 
+        {rooms.length===0&&hasIfc&&inferredRooms.map((room:any,i:number)=>{
+          const points=Array.isArray(room?.polygon)?room.polygon:[];
+          if(points.length<3)return null;
+          const pts=points.map((p:any)=>String(tx(num(p.x)))+","+String(ty(num(p.y)))).join(" ");
+          const cx=tx(num(room?.center?.x));
+          const cy=ty(num(room?.center?.y));
+          return <g key={room.id||i}>
+            <polygon points={pts} fill="rgba(89,180,221,.10)" stroke="rgba(89,180,221,.48)" strokeWidth={2}/>
+            <rect x={cx-42} y={cy-15} width={84} height={30} rx={9} fill="rgba(21,28,34,.82)"/>
+            <text x={cx} y={cy+5} textAnchor="middle" fill="#fff" fontSize={13} fontWeight="700">
+              {room?.areaM2 ? Number(room.areaM2).toFixed(1)+" م²" : "فراغ "+String(i+1)}
+            </text>
+          </g>;
+        })}
+
         {rooms.map((room,i)=>{
           const x=room.bbox.x/1000*imageWidth;
           const y=room.bbox.y/1000*imageHeight;
@@ -114,7 +130,7 @@ export default function PlanReading({
       <span><i className="legendWall"/>جدار BIM/IFC</span>
       <span><i className="legendDoor"/>باب</span>
       <span><i className="legendWindow"/>نافذة</span>
-      <span><i className="legendRoom"/>غرفة/فراغ</span>
+      <span><i className="legendRoom"/>غرفة/فراغ هندسي</span>
     </div>
 
     <div className="readingFoot">
