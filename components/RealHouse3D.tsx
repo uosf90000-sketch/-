@@ -1,7 +1,7 @@
 "use client";
 
 import { Canvas, useFrame } from "@react-three/fiber";
-import { Environment, Html, OrbitControls, RoundedBox } from "@react-three/drei";
+import { OrbitControls, RoundedBox } from "@react-three/drei";
 import { useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
@@ -55,7 +55,7 @@ function WallMesh({wall,openings}:{wall:any;openings:any[]}){
       const segLen=s.end-s.start;
       const center=(s.start+s.end)/2;
       const p=localToWorld(center,h/2);
-      return <mesh key={i} position={[p.x,p.y,p.z]} rotation={[0,angle,0]} castShadow receiveShadow>
+      return <mesh key={i} position={[p.x,p.y,p.z]} rotation={[0,angle,0]}>
         <boxGeometry args={[segLen,h,thick]}/>
         <meshStandardMaterial color="#d8d0c4" roughness={.82}/>
       </mesh>;
@@ -74,16 +74,17 @@ function WallMesh({wall,openings}:{wall:any;openings:any[]}){
 
       return <group key={i}>
         {pieces.map(piece=><mesh key={piece.key}
-          position={[p.x,piece.y,p.z]} rotation={[0,angle,0]} castShadow receiveShadow>
+          position={[p.x,piece.y,p.z]} rotation={[0,angle,0]}>
           <boxGeometry args={[o.end-o.start,piece.height,thick]}/>
           <meshStandardMaterial color="#d8d0c4" roughness={.82}/>
         </mesh>)}
         <mesh position={[p.x,sill+openH/2,p.z]} rotation={[0,angle,0]}>
           <boxGeometry args={[Math.max(.5,o.end-o.start),openH,Math.max(.025,thick*.18)]}/>
-          <meshPhysicalMaterial
+          <meshStandardMaterial
             color={o.kind==="window"?"#8eb9c7":"#6f5847"}
-            transparent={o.kind==="window"} opacity={o.kind==="window" ? .28 : 1}
-            transmission={o.kind==="window" ? .55 : 0} roughness={o.kind==="window" ? .18 : .65}
+            transparent={o.kind==="window"}
+            opacity={o.kind==="window" ? .42 : 1}
+            roughness={o.kind==="window" ? .28 : .65}
           />
         </mesh>
       </group>;
@@ -202,12 +203,17 @@ export default function RealHouse3D({
     : {position:[cx+size*.72,Math.max(7,size*.58),-cy+size*.72] as [number,number,number],fov:45};
 
   return <div className={`real3dCanvas ${mode}`}>
-    <Canvas shadows camera={camera}>
+    <Canvas
+      camera={camera}
+      dpr={[1,1.25]}
+      gl={{antialias:true,alpha:false,powerPreference:"high-performance"}}
+      onCreated={({gl})=>gl.setClearColor("#d8d2c9")}
+    >
       <color attach="background" args={["#d8d2c9"]}/>
       <fog attach="fog" args={["#d8d2c9",Math.max(18,size*1.2),Math.max(35,size*2.5)]}/>
-      <ambientLight intensity={.55}/>
-      <directionalLight position={[cx+8,12,-cy+6]} intensity={2.2} castShadow/>
-      <mesh position={[cx,-.08,-cy]} receiveShadow>
+      <hemisphereLight intensity={1.25} color="#fff8e8" groundColor="#8a8177"/>
+      <directionalLight position={[cx+8,12,-cy+6]} intensity={1.65}/>
+      <mesh position={[cx,-.08,-cy]}>
         <boxGeometry args={[Math.max(4,bounds.maxX-bounds.minX+2),.12,Math.max(4,bounds.maxY-bounds.minY+2)]}/>
         <meshStandardMaterial color="#c8bcae" roughness={.9}/>
       </mesh>
@@ -219,7 +225,7 @@ export default function RealHouse3D({
         shape.moveTo(Number(points[0].x),Number(points[0].y));
         for(let j=1;j<points.length;j++)shape.lineTo(Number(points[j].x),Number(points[j].y));
         shape.closePath();
-        return <mesh key={room.id||i} rotation={[-Math.PI/2,0,0]} position={[0,.015,0]} receiveShadow>
+        return <mesh key={room.id||i} rotation={[-Math.PI/2,0,0]} position={[0,.015,0]}>
           <shapeGeometry args={[shape]}/>
           <meshStandardMaterial color={i%2===0?"#b9c5b7":"#c8bcae"} roughness={.95} side={THREE.DoubleSide}/>
         </mesh>;
@@ -229,7 +235,6 @@ export default function RealHouse3D({
       {[...items,...lights,...ac].map((item,i)=>
         <Furniture key={`${item.category}-${item.name}-${i}`} item={item} position={itemPos(item)} onSelect={onSelect||(()=>{})}/>)}
 
-      <Environment preset="apartment"/>
       <CameraTour enabled={autoplay} center={center} size={size}/>
       <OrbitControls
         enabled={!autoplay}
