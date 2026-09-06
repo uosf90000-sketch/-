@@ -19,3 +19,48 @@ body{min-height:100vh}.topbar{height:74px;background:rgba(255,252,247,.94);backd
 @media(max-width:700px){
   .topbar{padding:0 16px}.headerActions .ghost,.headerActions .lang{display:none}.brand{min-width:0}.heroCopy{padding:38px 22px}.hero h1{font-size:34px}.heroScene{height:400px}.features{grid-template-columns:repeat(2,1fr);margin:0}.steps{grid-template-columns:1fr}.heroActions{flex-wrap:wrap}.sceneStat{display:none}.tourTop{padding:0 12px}.tourTop .brand small{display:none}.tourActions .darkPill:first-child{display:none}.miniMap{width:150px;left:12px}.tourTools{right:10px}.floatingInfo{right:92px;left:12px;width:auto}.cinemaBar{left:10px;right:10px;bottom:10px;grid-template-columns:1fr 45px 80px}.timeline{display:none}
 }
+
+
+.fileInput{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.uploadButton{border:1.5px solid #b99563;cursor:pointer;text-align:right;color:inherit}
+.uploadButton:hover{background:#fffaf3;transform:translateY(-1px)}
+.uploadSubmit{margin-top:12px;min-width:260px}
+.uploadSubmit:disabled{opacity:.6;cursor:wait}
+.uploadError{margin-top:10px!important;color:#9d332d!important;font-size:13px!important;line-height:1.6!important}
+
+.realProject{min-height:100vh;background:#f4efe7}
+.realProjectHead{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;padding:34px 4vw 20px}
+.realProjectHead h1{margin:3px 0 6px;font-size:30px}
+.realProjectHead p{margin:0;color:var(--muted);font-size:13px}
+.realProjectLoading{padding:80px;text-align:center;font-size:18px}
+.realPipeline{margin:0 4vw 18px;background:#fbf8f3;border:1px solid var(--line);border-radius:18px;display:grid;grid-template-columns:repeat(5,1fr);overflow:hidden}
+.stage{padding:18px 14px;text-align:center;border-left:1px solid #e9e0d4;display:flex;flex-direction:column;align-items:center;gap:6px;color:#887d70}
+.stage span{width:31px;height:31px;border-radius:50%;border:1px solid #b9ad9d;display:grid;place-items:center;font-size:13px}
+.stage b{font-size:13px}.stage small{font-size:11px}
+.stage.ready{color:#5d4a31;background:#f7efe4}
+.stage.ready span{background:#8b6639;color:white;border-color:#8b6639}
+.realProjectGrid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;padding:0 4vw 50px;direction:ltr}
+.realPreviewCard,.realStatus{direction:rtl}
+.realPreviewCard{background:#fbf8f3;border:1px solid var(--line);border-radius:20px;overflow:hidden;min-height:620px}
+.cardHead{height:72px;padding:14px 18px;border-bottom:1px solid #e6dccf;display:flex;align-items:center;justify-content:space-between}
+.cardHead>div{display:flex;flex-direction:column;gap:5px}.cardHead small{color:var(--muted)}
+.realPreview{height:calc(100% - 72px);min-height:540px;background:#d8d1c7;display:grid;place-items:center;overflow:auto}
+.realPlanImage{max-width:96%;max-height:82vh;object-fit:contain;background:white;box-shadow:0 14px 40px rgba(36,31,26,.18)}
+.realPlanPdf{width:100%;height:72vh;border:0;background:white}
+.noPreview{width:min(520px,88%);background:#fffaf4;padding:30px;border-radius:18px;text-align:center;box-shadow:var(--shadow)}
+.noPreview>b{font-size:38px;color:#7e5b2e}.noPreview p{color:var(--muted);line-height:1.8}
+.realStatus{display:flex;flex-direction:column;gap:12px}
+.statusCard{background:#fbf8f3;border:1px solid var(--line);border-radius:18px;padding:18px}
+.statusCard h3{margin:0 0 8px}.statusCard p{color:var(--muted);font-size:13px;line-height:1.75}
+.statusCard.good{border-color:#c9d8bf;background:#f6faf2}.statusCard.good>b{color:#49653b}
+.mutedCard{background:#eee8df}
+.realError{margin-top:10px;background:#fff0ee;border:1px solid #efc4bf;color:#8f3129;padding:10px;border-radius:10px;font-size:12px;line-height:1.6}
+.realSuccess{margin-top:10px;background:#eff7eb;border:1px solid #c7ddbc;color:#416137;padding:10px;border-radius:10px;font-size:12px}
+.statusCard .btn:disabled{opacity:.45;cursor:not-allowed}
+
+@media(max-width:900px){
+  .realProjectGrid{grid-template-columns:1fr}.realPipeline{grid-template-columns:1fr 1fr}.stage{border-bottom:1px solid #e9e0d4}.realProjectHead{align-items:flex-start;flex-direction:column}
+}
+@media(max-width:600px){
+  .realPipeline{grid-template-columns:1fr}.realProjectGrid{padding:0 12px 30px}.realProjectHead{padding:25px 16px 16px}.realPreviewCard{min-height:480px}.realPreview{min-height:410px}.realPlanPdf{height:62vh}
+}
