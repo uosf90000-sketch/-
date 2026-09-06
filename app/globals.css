@@ -117,3 +117,8 @@ body{min-height:100vh}.topbar{height:74px;background:rgba(255,252,247,.94);backd
   .real3dInfo{right:10px;left:10px;top:auto;bottom:105px;width:auto}
   .real3dBottom{bottom:10px;min-width:0;width:calc(100% - 20px);gap:10px;padding:9px 8px}.real3dBottom>div{flex:1}.real3dBottom small{font-size:9px}.real3dBottom b{font-size:16px}
 }
+
+
+.overlayAlignNotice{position:absolute;inset:auto 14px 14px 14px;z-index:5;background:rgba(32,29,25,.88);color:#fff;padding:10px 12px;border-radius:12px;text-align:center;font-size:12px;backdrop-filter:blur(8px)}
+.overlayAlignNotice.error{background:rgba(113,49,42,.9)}
+.planOverlayWrap{position:relative}
