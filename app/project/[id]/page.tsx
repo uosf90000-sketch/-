@@ -185,10 +185,10 @@ export default function RealProjectPage(){
         <div className="statusCard mutedCard">
           <h3>3D</h3>
           <p>{analysis?.result?.ifcPlan?.walls?.length
-            ?"تم استخراج هندسة IFC الحقيقية. عند اكتمال تصميم OpenAI يمكنك فتح المنزل المفروش."
+            ?"تم استخراج هندسة IFC الحقيقية. يمكنك فتح 3D الهندسي الآن للتحقق من الجدران والفتحات والغرف قبل OpenAI."
             :"بيتي يكمل استخراج IFC الحقيقي من BIMy، ولن يستخدم نموذج البيت التجريبي."}</p>
-          {analysis?.result?.ifcPlan?.walls?.length&&design?.design&&(
-            <Link className="btn gold wide" href={`/project/${upload.id}/3d`}>فتح المنزل ثلاثي الأبعاد</Link>
+          {analysis?.result?.ifcPlan?.walls?.length&&(
+            <Link className="btn gold wide" href={`/project/${upload.id}/3d`}>{design?.design?"فتح المنزل ثلاثي الأبعاد":"فتح 3D الهندسي"}</Link>
           )}
         </div>
       </aside>
