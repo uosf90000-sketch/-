@@ -162,7 +162,7 @@ export async function POST(request:Request){
 
     if(status==="ready"){
       try{
-        const response=await fetch(`${base}/api/ifc/${encodeURIComponent(projectId)}`,{
+        const response=await fetch(`${base}/api/export/revit-ifc/${encodeURIComponent(projectId)}`,{
           headers:{Authorization:`Bearer ${token}`,Accept:"application/x-step, application/octet-stream, */*"},
           cache:"no-store",redirect:"manual"
         });
