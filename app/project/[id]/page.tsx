@@ -20,11 +20,16 @@ export default function RealProjectPage(){
   const [design,setDesign]=useState<any>(null);
   const [designError,setDesignError]=useState("");
   const [designing,setDesigning]=useState(false);
+  const [integration,setIntegration]=useState<{bimyConfigured:boolean;openaiConfigured:boolean}|null>(null);
 
   useEffect(()=>{
     if(!id)return;
-    fetch(`/api/uploads/${id}`).then(r=>r.json()).then(body=>{
+    Promise.all([
+      fetch(`/api/uploads/${id}`).then(r=>r.json()),
+      fetch("/api/health").then(r=>r.json())
+    ]).then(([body,health])=>{
       if(body.ok)setUpload(body.upload);
+      setIntegration({bimyConfigured:Boolean(health?.bimyConfigured),openaiConfigured:Boolean(health?.openaiConfigured)});
     }).finally(()=>setLoading(false));
   },[id]);
 
@@ -72,7 +77,7 @@ export default function RealProjectPage(){
 
     <section className="realPipeline">
       <div className="stage ready"><span>✓</span><b>رفع وحفظ المخطط</b><small>مكتمل فعليًا</small></div>
-      <div className={analysis?"stage ready":"stage"}><span>{analysis?"✓":"2"}</span><b>تحليل BIMy</b><small>{analysis?"تم من BIMy":"بانتظار ربط BIMy"}</small></div>
+      <div className={analysis?"stage ready":"stage"}><span>{analysis?"✓":"2"}</span><b>تحليل BIMy</b><small>{analysis?"تم من BIMy":integration?.bimyConfigured?"جاهز للتشغيل":"بانتظار تفعيل التكامل"}</small></div>
       <div className={design?"stage ready":"stage"}><span>{design?"✓":"3"}</span><b>التصميم الداخلي</b><small>{design?"تم من OpenAI":"بعد اكتمال BIMy"}</small></div>
       <div className="stage"><span>4</span><b>3D الحقيقي</b><small>يبنى من هندسة BIM</small></div>
       <div className="stage"><span>5</span><b>الجولة التفاعلية</b><small>بعد اكتمال 3D</small></div>
@@ -89,8 +94,12 @@ export default function RealProjectPage(){
 
         <div className="statusCard">
           <h3>BIMy</h3>
-          <p>لن يعرض بيتي غرفًا أو جدرانًا أو أبعادًا إلا إذا رجعت فعليًا من BIMy.</p>
-          <button className="btn gold wide" onClick={runAnalysis} disabled={analyzing}>{analyzing?"جاري إرسال المخطط إلى BIMy…":"تشغيل تحليل BIMy"}</button>
+          <p>{integration?.bimyConfigured
+            ?"التكامل جاهز. عند التشغيل سيرسل بيتي المخطط الحقيقي إلى BIMy."
+            :"تم حفظ المخطط. تكامل BIMy المباشر ما زال بانتظار التفعيل الرسمي، ولن نطلب منك عنوان API غير متوفر لديك."}</p>
+          <button className="btn gold wide" onClick={runAnalysis} disabled={analyzing||!integration?.bimyConfigured}>
+            {analyzing?"جاري إرسال المخطط إلى BIMy…":integration?.bimyConfigured?"تشغيل تحليل BIMy":"بانتظار تفعيل BIMy"}
+          </button>
           {analysisError&&<div className="realError">{analysisError}</div>}
           {analysis&&<div className="realSuccess">✓ رجعت نتيجة حقيقية من BIMy.</div>}
         </div>
@@ -98,7 +107,7 @@ export default function RealProjectPage(){
         <div className="statusCard">
           <h3>OpenAI — المصمم الداخلي</h3>
           <p>يعمل فقط بعد وصول بيانات BIM الحقيقية.</p>
-          <button className="btn gold wide" onClick={runDesign} disabled={!analysis?.result||designing}>{designing?"جاري التصميم…":"تشغيل التصميم الداخلي"}</button>
+          <button className="btn gold wide" onClick={runDesign} disabled={!analysis?.result||designing||!integration?.openaiConfigured}>{designing?"جاري التصميم…":integration?.openaiConfigured?"تشغيل التصميم الداخلي":"بانتظار ربط OpenAI"}</button>
           {designError&&<div className="realError">{designError}</div>}
           {design&&<div className="realSuccess">✓ تم إنشاء التصميم بواسطة OpenAI.</div>}
         </div>
