@@ -16,15 +16,18 @@ export default function Real3DPage(){
   const [mode,setMode]=useState<"overview"|"tour">("overview");
   const [autoplay,setAutoplay]=useState(false);
   const [selected,setSelected]=useState<any>(null);
+  const [doors,setDoors]=useState<any[]>([]);
 
   useEffect(()=>{
     if(!id)return;
     Promise.all([
       fetch(`/api/uploads/${id}/analysis`).then(async r=>r.ok?await r.json():null),
-      fetch(`/api/uploads/${id}/design`).then(async r=>r.ok?await r.json():null)
-    ]).then(([a,d])=>{
+      fetch(`/api/uploads/${id}/design`).then(async r=>r.ok?await r.json():null),
+      fetch(`/api/uploads/${id}/doors`).then(async r=>r.ok?await r.json():null)
+    ]).then(([a,d,doorSaved])=>{
       if(a?.ok)setAnalysis(a.analysis);
       if(d?.ok)setDesign(d.design);
+      if(Array.isArray(doorSaved?.doors?.doors))setDoors(doorSaved.doors.doors);
     }).finally(()=>setLoading(false));
   },[id]);
 
@@ -43,7 +46,7 @@ export default function Real3DPage(){
       </div>
     </div>
 
-    <RealHouse3D analysis={analysis} design={sceneDesign} mode={mode} autoplay={autoplay} onSelect={setSelected}/>
+    <RealHouse3D analysis={analysis} design={sceneDesign} detectedDoors={doors} mode={mode} autoplay={autoplay} onSelect={setSelected}/>
 
     <div className="real3dLegend">
       <span>اسحب بالماوس للدوران</span><span>قرّب للتفاصيل</span><span>اضغط أي عنصر للمعلومات</span>
@@ -64,7 +67,7 @@ export default function Real3DPage(){
 
     <div className="real3dBottom">
       <div><small>الجدران</small><b>{analysis.ifcPlan.walls?.length||0}</b></div>
-      <div><small>الفتحات</small><b>{analysis.ifcPlan.openings?.length||0}</b></div>
+      <div><small>الفتحات</small><b>{(analysis.ifcPlan.openings?.length||0)+doors.length}</b></div>
       <div><small>الفراغات</small><b>{analysis.inferredRooms?.length||0}</b></div>
       <div><small>عناصر التصميم</small><b>{sceneDesign.design.items?.length||0}</b></div>
     </div>
