@@ -1,25 +1,52 @@
-const demoAnalysis = {
-  provider:"demo",
-  confidence:0.93,
-  rooms:[
-    {id:"majlis",name:"المجلس",area:34},
-    {id:"kitchen",name:"المطبخ",area:22},
-    {id:"bedroom",name:"غرفة النوم",area:20},
-    {id:"bathroom",name:"الحمام",area:7}
-  ],
-  geometry:{walls:22,doors:8,windows:10}
-};
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+
+export const runtime="nodejs";
+export const dynamic="force-dynamic";
+
+const ROOT=process.env.RAILWAY_VOLUME_MOUNT_PATH || "/data";
 
 export async function POST(request:Request){
   const input=await request.json().catch(()=>({}));
+  const uploadId=input?.uploadId;
+  if(!uploadId) return Response.json({ok:false,error:"uploadId مطلوب."},{status:400});
+
   const url=process.env.BIMY_API_URL;
   const key=process.env.BIMY_API_KEY;
-  if(!url || !key) return Response.json({ok:true,...demoAnalysis,note:"BIMy adapter ready; add BIMY_API_URL and BIMY_API_KEY on Railway.",input});
+  if(!url || !key){
+    return Response.json({
+      ok:false,
+      code:"BIMY_NOT_CONFIGURED",
+      error:"تم رفع المخطط فعليًا، لكن BIMy غير مربوط حتى الآن. أضف BIMY_API_KEY وعنوان الـ API الرسمي عندما يتوفر."
+    },{status:503});
+  }
+
   try{
-    const r=await fetch(url,{method:"POST",headers:{"content-type":"application/json","authorization":`Bearer ${key}`},body:JSON.stringify(input)});
-    const body=await r.json().catch(()=>({}));
-    if(!r.ok) throw new Error(`BIMy HTTP ${r.status}`);
-    return Response.json({ok:true,provider:"bimy",result:body});
+    const metaRaw=await readFile(path.join(ROOT,"uploads",uploadId,"meta.json"),"utf8");
+    const meta=JSON.parse(metaRaw);
+    const bytes=await readFile(path.join(ROOT,"uploads",uploadId,meta.storedName));
+
+    const form=new FormData();
+    const blob=new Blob([bytes],{type:meta.type||"application/octet-stream"});
+    form.append("file",blob,meta.name);
+    form.append("uploadId",uploadId);
+
+    const r=await fetch(url,{
+      method:"POST",
+      headers:{authorization:`Bearer ${key}`},
+      body:form
+    });
+
+    const contentType=r.headers.get("content-type")||"";
+    const body=contentType.includes("application/json")
+      ? await r.json().catch(()=>({}))
+      : {raw:await r.text().catch(()=>"")};
+
+    if(!r.ok){
+      return Response.json({ok:false,provider:"bimy",error:body?.error||body?.message||`BIMy HTTP ${r.status}`,details:body},{status:502});
+    }
+
+    return Response.json({ok:true,provider:"bimy",uploadId,result:body});
   }catch(error){
     return Response.json({ok:false,error:error instanceof Error?error.message:"BIMy error"},{status:502});
   }
