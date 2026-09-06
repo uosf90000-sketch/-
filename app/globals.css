@@ -64,3 +64,30 @@ body{min-height:100vh}.topbar{height:74px;background:rgba(255,252,247,.94);backd
 @media(max-width:600px){
   .realPipeline{grid-template-columns:1fr}.realProjectGrid{padding:0 12px 30px}.realProjectHead{padding:25px 16px 16px}.realPreviewCard{min-height:480px}.realPreview{min-height:410px}.realPlanPdf{height:62vh}
 }
+
+
+.readingCard{background:#fbf8f3;border:1px solid var(--line);border-radius:22px;padding:18px;box-shadow:var(--shadow)}
+.readingHead{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:16px}
+.readingHead h2{margin:4px 0 6px;font-size:27px}
+.readingHead p{margin:0;color:var(--muted);font-size:13px;line-height:1.75}
+.readingStatus{white-space:nowrap;background:#edf6ea;border:1px solid #c7dbc0;color:#47603e;padding:9px 12px;border-radius:999px;font-size:12px;font-weight:700}
+.readingStats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+.readingStats>div{background:#f2ece3;border:1px solid #e0d5c6;border-radius:16px;padding:14px;text-align:center;display:flex;flex-direction:column;gap:4px}
+.readingStats span{font-size:12px;color:#776d62}.readingStats b{font-size:29px;color:#2b2722}
+.planOverlayWrap{background:#171717;border-radius:18px;overflow:hidden;padding:10px;min-height:540px;display:grid;place-items:center}
+.planOverlaySvg{width:100%;height:auto;max-height:78vh;display:block;background:#202020}
+.readingLegend{display:flex;gap:18px;flex-wrap:wrap;padding:12px 2px 4px;font-size:12px;color:#6d6358}
+.readingLegend span{display:flex;align-items:center;gap:7px}
+.readingLegend i{width:22px;height:7px;border-radius:6px;display:inline-block}
+.legendWall{background:#69c7ee}.legendDoor{background:#f1d28f}.legendWindow{background:#071729;border:1px solid #61717c}.legendRoom{background:rgba(89,180,221,.22);border:1px solid rgba(89,180,221,.6)}
+.readingFoot{display:flex;gap:16px;flex-wrap:wrap;border-top:1px solid #e8ded2;margin-top:8px;padding-top:11px;color:#81766a;font-size:11px}
+.roomsReadingNotice{margin-top:10px;background:#fff7e8;border:1px solid #ead2a4;color:#745727;padding:11px 14px;border-radius:12px;font-size:12px}
+@media(max-width:700px){
+  .readingCard{padding:10px;border-radius:18px}
+  .readingHead{display:block}.readingHead h2{font-size:22px}.readingStatus{display:inline-block;margin-top:10px}
+  .readingStats{grid-template-columns:repeat(2,1fr);gap:8px}
+  .readingStats>div{padding:10px}.readingStats b{font-size:25px}
+  .planOverlayWrap{padding:5px;min-height:420px;border-radius:14px}
+  .planOverlaySvg{max-height:none}
+  .readingLegend{gap:10px;font-size:11px}
+}
