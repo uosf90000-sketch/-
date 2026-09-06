@@ -21,7 +21,7 @@ export default function RealProjectPage(){
   const [design,setDesign]=useState<any>(null);
   const [designError,setDesignError]=useState("");
   const [designing,setDesigning]=useState(false);
-  const [integration,setIntegration]=useState<{bimyConfigured:boolean;openaiConfigured:boolean}|null>(null);
+  const [integration,setIntegration]=useState<{bimyConfigured:boolean;openaiConfigured:boolean;aiStageEnabled:boolean}|null>(null);
   const [roomsData,setRoomsData]=useState<any[]>([]);
   const [roomsBusy,setRoomsBusy]=useState(false);
   const [roomsAttempted,setRoomsAttempted]=useState(false);
@@ -49,7 +49,7 @@ export default function RealProjectPage(){
         setDesign(designSaved.design);
         setAutoDesignAttempted(true);
       }
-      setIntegration({bimyConfigured:Boolean(health?.bimyConfigured),openaiConfigured:Boolean(health?.openaiConfigured)});
+      setIntegration({bimyConfigured:Boolean(health?.bimyConfigured),openaiConfigured:Boolean(health?.openaiConfigured),aiStageEnabled:Boolean(health?.aiStageEnabled)});
     }).finally(()=>setLoading(false));
   },[id]);
 
@@ -68,7 +68,7 @@ export default function RealProjectPage(){
 
   useEffect(()=>{
     const scanReady=analysis?.result?.scan?.project?.scanStatus==="ready" || analysis?.result?.scanStatus==="ready";
-    if(upload&&integration?.openaiConfigured&&scanReady&&!roomsAttempted&&!roomsBusy){
+    if(upload&&integration?.openaiConfigured&&integration?.aiStageEnabled&&scanReady&&!roomsAttempted&&!roomsBusy){
       void detectRooms();
     }
   },[upload,analysis,integration,roomsAttempted,roomsBusy]);
@@ -84,7 +84,7 @@ export default function RealProjectPage(){
 
   useEffect(()=>{
     const hasIfc=Array.isArray(analysis?.result?.ifcPlan?.walls)&&analysis.result.ifcPlan.walls.length>0;
-    if(upload&&integration?.openaiConfigured&&hasIfc&&roomsData.length>0&&!design&&!designing&&!autoDesignAttempted){
+    if(upload&&integration?.openaiConfigured&&integration?.aiStageEnabled&&hasIfc&&roomsData.length>0&&!design&&!designing&&!autoDesignAttempted){
       setAutoDesignAttempted(true);
       void runDesign();
     }
@@ -176,8 +176,8 @@ export default function RealProjectPage(){
 
         <div className="statusCard">
           <h3>OpenAI — المصمم الداخلي</h3>
-          <p>{analysis?.result?"نتيجة BIMy الحقيقية موجودة. يمكنك تشغيل المصمم الداخلي الآن.":"يعمل فقط بعد وصول بيانات BIM الحقيقية."}</p>
-          <button className="btn gold wide" onClick={runDesign} disabled={!analysis?.result||designing||!integration?.openaiConfigured}>{designing?"جاري التصميم…":integration?.openaiConfigured?"تشغيل التصميم الداخلي":"بانتظار ربط OpenAI"}</button>
+          <p>{!integration?.aiStageEnabled?"مرحلة OpenAI موقوفة مؤقتًا إلى أن نعتمد المسار الهندسي بالكامل.":analysis?.result?"نتيجة BIMy الحقيقية موجودة. يمكنك تشغيل المصمم الداخلي الآن.":"يعمل فقط بعد وصول بيانات BIM الحقيقية."}</p>
+          <button className="btn gold wide" onClick={runDesign} disabled={!analysis?.result||designing||!integration?.openaiConfigured||!integration?.aiStageEnabled}>{designing?"جاري التصميم…":!integration?.aiStageEnabled?"موقوف حتى اعتماد المسار":integration?.openaiConfigured?"تشغيل التصميم الداخلي":"بانتظار ربط OpenAI"}</button>
           {designError&&<div className="realError">{designError}</div>}
           {design&&<div className="realSuccess">✓ تم إنشاء التصميم بواسطة OpenAI.</div>}
         </div>
