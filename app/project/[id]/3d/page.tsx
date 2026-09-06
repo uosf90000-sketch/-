@@ -30,12 +30,12 @@ export default function Real3DPage(){
 
   if(loading)return <main className="real3dPage"><div className="real3dLoading">جاري تجهيز المنزل ثلاثي الأبعاد…</div></main>;
   if(!analysis?.ifcPlan)return <main className="real3dPage"><div className="real3dEmpty"><h1>الهندسة ثلاثية الأبعاد غير جاهزة بعد</h1><p>أكمل تحليل BIMy واستخراج IFC أولًا.</p><Link href={`/project/${id}`} className="btn gold">العودة للمشروع</Link></div></main>;
-  if(!design?.design)return <main className="real3dPage"><div className="real3dEmpty"><h1>التصميم الداخلي غير جاهز بعد</h1><p>شغّل OpenAI من صفحة المشروع ليتم تأثيث المنزل.</p><Link href={`/project/${id}`} className="btn gold">العودة للمشروع</Link></div></main>;
+  const sceneDesign=design?.design?design:{design:{style:"هندسة IFC فقط",items:[],lighting:[],airConditioning:[]}};
 
   return <main className="real3dPage">
     <div className="real3dTop">
       <Link href={`/project/${id}`} className="real3dBack">← المشروع</Link>
-      <div className="real3dTitle"><b>بيتي 3D</b><small>{design.design.style}</small></div>
+      <div className="real3dTitle"><b>بيتي 3D</b><small>{sceneDesign.design.style}</small></div>
       <div className="real3dModes">
         <button className={mode==="overview"?"active":""} onClick={()=>{setMode("overview");setAutoplay(false)}}>منظور علوي</button>
         <button className={mode==="tour"?"active":""} onClick={()=>setMode("tour")}>مستوى العين</button>
@@ -43,7 +43,7 @@ export default function Real3DPage(){
       </div>
     </div>
 
-    <RealHouse3D analysis={analysis} design={design} mode={mode} autoplay={autoplay} onSelect={setSelected}/>
+    <RealHouse3D analysis={analysis} design={sceneDesign} mode={mode} autoplay={autoplay} onSelect={setSelected}/>
 
     <div className="real3dLegend">
       <span>اسحب بالماوس للدوران</span><span>قرّب للتفاصيل</span><span>اضغط أي عنصر للمعلومات</span>
@@ -65,8 +65,8 @@ export default function Real3DPage(){
     <div className="real3dBottom">
       <div><small>الجدران</small><b>{analysis.ifcPlan.walls?.length||0}</b></div>
       <div><small>الفتحات</small><b>{analysis.ifcPlan.openings?.length||0}</b></div>
-      <div><small>عناصر التصميم</small><b>{design.design.items?.length||0}</b></div>
-      <div><small>الإنارة</small><b>{design.design.lighting?.length||0}</b></div>
+      <div><small>الفراغات</small><b>{analysis.inferredRooms?.length||0}</b></div>
+      <div><small>عناصر التصميم</small><b>{sceneDesign.design.items?.length||0}</b></div>
     </div>
   </main>;
 }
