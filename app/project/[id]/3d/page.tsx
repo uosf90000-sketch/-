@@ -11,17 +11,17 @@ function fmt(n:any,d=1){
   return typeof n==="number"&&Number.isFinite(n)?n.toFixed(d):"—";
 }
 
-export default function Real3DPage(){
+export default function Approved3DPage(){
   const params=useParams<{id:string}>();
   const id=params?.id;
   const [analysis,setAnalysis]=useState<any>(null);
   const [design,setDesign]=useState<any>(null);
+  const [doors,setDoors]=useState<any[]>([]);
   const [loading,setLoading]=useState(true);
   const [mode,setMode]=useState<"overview"|"tour">("overview");
   const [autoplay,setAutoplay]=useState(false);
   const [selected,setSelected]=useState<any>(null);
-  const [doors,setDoors]=useState<any[]>([]);
-  const [showStats,setShowStats]=useState(true);
+  const [day,setDay]=useState(true);
 
   useEffect(()=>{
     if(!id)return;
@@ -36,118 +36,131 @@ export default function Real3DPage(){
     }).finally(()=>setLoading(false));
   },[id]);
 
-  if(loading)return <main className="immersive3d loading"><div className="immersiveLoader"><i/><b>نجهّز بيتك</b><span>قراءة الهندسة وبناء المشهد…</span></div></main>;
-  if(!analysis?.ifcPlan)return <main className="immersive3d empty"><div className="immersiveEmpty"><span>◇</span><h1>الـ3D غير جاهز بعد</h1><p>ارجع للمشروع وأكمل استخراج IFC.</p><Link href={"/project/"+id} className="studioPrimaryBtn">العودة للمشروع</Link></div></main>;
+  if(loading)return <main className="approved3dLoading"><i/><b>نجهّز التوأم ثلاثي الأبعاد…</b></main>;
+  if(!analysis?.ifcPlan)return <main className="approved3dLoading"><b>الـ3D غير جاهز بعد</b><Link href={"/project/"+id}>العودة للمخطط</Link></main>;
 
-  const sceneDesign=design?.design?design:{design:{style:"هندسة IFC فقط",items:[],lighting:[],airConditioning:[]}};
-  const wallCount=analysis.ifcPlan.walls?.length||0;
-  const providerOpenings=analysis.ifcPlan.openings?.length||0;
-  const roomCount=analysis.inferredRooms?.length||0;
-  const furnitureCount=sceneDesign.design.items?.length||0;
+  const sceneDesign=design?.design?design:{design:{style:"هندسة IFC",items:[],lighting:[],airConditioning:[]}};
+  const rooms=Array.isArray(analysis?.inferredRooms)?analysis.inferredRooms:[];
+  const walls=analysis?.ifcPlan?.walls?.length||0;
+  const openings=(analysis?.ifcPlan?.openings?.length||0)+doors.length;
+  const furniture=sceneDesign.design.items?.length||0;
 
-  return <main className={"immersive3d "+mode}>
-    <RealHouse3D
-      analysis={analysis}
-      design={sceneDesign}
-      detectedDoors={doors}
-      mode={mode}
-      autoplay={autoplay}
-      onSelect={setSelected}
-    />
+  return <main className={"approved3dStudio "+(day?"day":"night")}>
+    <RealHouse3D analysis={analysis} design={sceneDesign} detectedDoors={doors}
+      mode={mode} autoplay={autoplay} onSelect={setSelected}/>
 
-    <header className="viewerTopRail">
-      <Link href={"/project/"+id} className="viewerBrand">
-        <span className="viewerBrandMark">⌂</span>
-        <span><b>بيتي</b><small>3D Studio</small></span>
+    <header className="approved3dTopbar">
+      <Link href="/" className="approved3dBrand">
+        <span className="approvedLogoMark">⌂</span>
+        <span><b>BAYTI</b><small>LIVING TWIN</small></span>
       </Link>
 
-      <div className="viewerModeSwitch">
-        <button className={mode==="overview"?"active":""} onClick={()=>{setMode("overview");setAutoplay(false)}}>
-          <span>◇</span> منظور علوي
-        </button>
-        <button className={mode==="tour"&&!autoplay?"active":""} onClick={()=>{setMode("tour");setAutoplay(false)}}>
-          <span>⊙</span> مستوى العين
-        </button>
-        <button className={autoplay?"active":""} onClick={()=>{setMode("tour");setAutoplay(v=>!v)}}>
-          <span>▶</span> {autoplay?"إيقاف الجولة":"جولة تلقائية"}
-        </button>
+      <div className="approved3dProjectSelect">الدور الأرضي⌄</div>
+
+      <div className="approved3dModes">
+        <button className={mode==="tour"&&!autoplay?"active":""} onClick={()=>{setMode("tour");setAutoplay(false)}}>🚶 Walk</button>
+        <button className={mode==="overview"?"active":""} onClick={()=>{setMode("overview");setAutoplay(false)}}>⟳ Orbit</button>
+        <button className={mode==="overview"?"active doll":""} onClick={()=>{setMode("overview");setAutoplay(false)}}>⌂ Dollhouse</button>
       </div>
 
-      <div className="viewerTopActions">
-        <button onClick={()=>setShowStats(v=>!v)} className={showStats?"active":""}>⌘</button>
-        <Link href={"/project/"+id} className="viewerExit">المشروع ←</Link>
+      <div className="approved3dTopActions">
+        <button onClick={()=>setDay(true)} className={day?"active":""}>☼ نهار</button>
+        <button onClick={()=>setDay(false)} className={!day?"active":""}>◐ ليل</button>
+        <Link href={"/project/"+id}>↗</Link>
       </div>
     </header>
 
-    <div className="viewerStatusChip">
-      <i/>
-      <span>{design?.design?"تصميم داخلي مفروش":"وضع التحقق الهندسي"}</span>
-      <em>·</em>
-      <small>{doors.length} باب مكتشف بصريًا</small>
-    </div>
+    <aside className="approved3dLeftPanel">
+      <div className="approvedMiniPlanHead"><b>المخطط</b><span>الدور الأرضي⌄</span></div>
+      <div className="approvedMiniPlan">
+        <img src={"/api/uploads/"+id+"/file"} alt="المخطط"/>
+        <span className="approvedMiniPosition"/>
+      </div>
+      <div className="approvedMiniZoom"><button>＋</button><button>−</button><button>⌖</button></div>
 
-    {mode==="tour"&&<div className="viewerCrosshair"><span/><i/></div>}
-
-    <div className="viewerHint">
-      <span className="viewerMouseIcon">⌖</span>
-      <div><b>{mode==="tour"?"انظر حولك واضغط أي سطح":"دوّر البيت ثم اضغط أي عنصر"}</b><small>جدار · نافذة · باب · أرضية · أثاث</small></div>
-    </div>
-
-    <aside className={"viewerInspector "+(selected?"open":"")}>
-      {selected?<>
-        <button className="viewerInspectorClose" onClick={()=>setSelected(null)}>×</button>
-        <div className="inspectorType"><i/>{selected.category||"عنصر"}</div>
-        <h2>{selected.name||"عنصر من المنزل"}</h2>
-        <p className="inspectorSource">المصدر: {selected.source||"بيتي"}</p>
-
-        <div className="inspectorPreview">
-          <div className={"surfacePreview "+(selected.type||"generic")}/>
-          <span>سيظهر هنا المنتج الحقيقي من مكتبتك</span>
-        </div>
-
-        <div className="inspectorRows">
-          {selected.type==="wall"&&<>
-            <div><span>الطول</span><b>{fmt(selected.lengthM)} م</b></div>
-            <div><span>الارتفاع</span><b>{fmt(selected.heightM)} م</b></div>
-            <div><span>السماكة</span><b>{fmt(selected.thicknessM,2)} م</b></div>
-          </>}
-          {selected.type==="floor"&&<>
-            <div><span>المساحة</span><b>{fmt(selected.areaM2)} م²</b></div>
-            <div><span>المحيط</span><b>{fmt(selected.perimeterM)} م</b></div>
-          </>}
-          {(selected.type==="door"||selected.type==="window")&&<>
-            <div><span>العرض</span><b>{fmt(selected.widthM)} م</b></div>
-            <div><span>الارتفاع</span><b>{fmt(selected.heightM)} م</b></div>
-            {selected.confidence&&<div><span>الثقة</span><b>{Math.round(selected.confidence*100)}%</b></div>}
-          </>}
-          {selected.material&&<div className="full"><span>الخامة</span><b>{selected.material}</b></div>}
-          {selected.color&&<div><span>اللون</span><b>{selected.color}</b></div>}
-          {selected.details&&<div className="full"><span>التفاصيل</span><b>{selected.details}</b></div>}
-        </div>
-
-        <div className="futureProductCard">
-          <div><span>مكتبة بيتي</span><b>المنتج + السعر + الكمية</b></div>
-          <small>سيتم تفعيلها عند إضافة مكتبتك.</small>
-        </div>
-      </>:<>
-        <div className="inspectorIdleIcon">⌖</div>
-        <h3>اختر عنصرًا من البيت</h3>
-        <p>اضغط جدارًا أو نافذة أو بابًا أو أرضية لتظهر معلوماته هنا.</p>
-      </>}
+      <nav className="approved3dToolNav">
+        <button className={mode==="tour"?"active":""} onClick={()=>setMode("tour")}>🚶 <span>المشي</span></button>
+        <button className={mode==="overview"?"active":""} onClick={()=>setMode("overview")}>⟳ <span>الدوران الحر</span></button>
+        <button onClick={()=>setMode("overview")}>⌂ <span>منظور مصغر</span></button>
+        <Link href={"/project/"+id}>⌗ <span>المخطط</span></Link>
+        <Link href={"/project/"+id+"/materials"}>▦ <span>المواد</span></Link>
+        <Link href={"/project/"+id+"/materials"}>▣ <span>المنتجات</span></Link>
+        <button>☼ <span>الإضاءة</span></button>
+        <button>⌁ <span>القياس</span></button>
+      </nav>
     </aside>
 
-    {showStats&&<div className="viewerMetricsDock">
-      <div><span>الجدران</span><b>{wallCount}</b><small>IFC</small></div>
-      <div><span>الفتحات</span><b>{providerOpenings+doors.length}</b><small>BIM + Vision</small></div>
-      <div><span>الفراغات</span><b>{roomCount}</b><small>Topology</small></div>
-      <div><span>الأثاث</span><b>{furnitureCount}</b><small>{furnitureCount?"Designed":"بعد OpenAI"}</small></div>
-    </div>}
+    <aside className="approved3dRightPanel">
+      <div className="approvedDetailHead"><b>تفاصيل العنصر</b><button onClick={()=>setSelected(null)}>×</button></div>
 
-    <div className="viewerBottomTools">
-      <button title="المواد"><span>◫</span><small>المواد</small></button>
-      <button title="الإضاءة"><span>☼</span><small>الإنارة</small></button>
-      <button title="معلومات العنصر" className={selected?"active":""}><span>ⓘ</span><small>المعلومات</small></button>
-      <button title="مستوى العين" className={mode==="tour"?"active":""} onClick={()=>setMode("tour")}><span>⊙</span><small>امشِ</small></button>
+      {selected?<>
+        <div className={"approvedDetailVisual "+(selected.type||"generic")}>
+          <span>{selected.category||"عنصر"}</span>
+        </div>
+        <div className="approvedDetailBody">
+          <small>{selected.category||"عنصر"}</small>
+          <h2>{selected.name||"عنصر من المنزل"}</h2>
+          <div className="approvedDetailRows">
+            {selected.type==="wall"&&<>
+              <div><span>الطول</span><b>{fmt(selected.lengthM)} م</b></div>
+              <div><span>الارتفاع</span><b>{fmt(selected.heightM)} م</b></div>
+              <div><span>السماكة</span><b>{fmt(selected.thicknessM,2)} م</b></div>
+            </>}
+            {selected.type==="floor"&&<>
+              <div><span>المساحة</span><b>{fmt(selected.areaM2)} م²</b></div>
+              <div><span>المحيط</span><b>{fmt(selected.perimeterM)} م</b></div>
+            </>}
+            {(selected.type==="door"||selected.type==="window")&&<>
+              <div><span>العرض</span><b>{fmt(selected.widthM)} م</b></div>
+              <div><span>الارتفاع</span><b>{fmt(selected.heightM)} م</b></div>
+            </>}
+            <div><span>المصدر</span><b>{selected.source||"BIMy / IFC"}</b></div>
+          </div>
+          <Link href={"/project/"+id+"/materials"} className="approvedGoldBtn wide">عرض المواد والمنتجات</Link>
+          <button className="approvedSoftBtn wide">استبدال ↔</button>
+        </div>
+      </>:<div className="approvedDetailEmpty">
+        <i>⌖</i><h3>اختر عنصرًا</h3><p>اضغط جدارًا أو بابًا أو نافذة أو أرضية داخل المشهد.</p>
+      </div>}
+
+      <div className="approvedCostSummary">
+        <h3>ملخص المشروع</h3>
+        <div><span>الجدران</span><b>{walls}</b></div>
+        <div><span>الفتحات</span><b>{openings}</b></div>
+        <div><span>الفراغات</span><b>{rooms.length}</b></div>
+        <div><span>عناصر الأثاث</span><b>{furniture}</b></div>
+      </div>
+    </aside>
+
+    <div className="approvedHotspotHint">
+      <span>●</span><b>{mode==="tour"?"اضغط العناصر أثناء المشي":"دوّر المشهد واضغط أي عنصر"}</b>
     </div>
+
+    <div className="approvedCinematicControl">
+      <button>‹</button>
+      <button className="play" onClick={()=>{setMode("tour");setAutoplay(v=>!v)}}>{autoplay?"Ⅱ":"▶"}</button>
+      <button>›</button>
+      <span>جولة سينمائية</span>
+      <small>{mode==="tour"?"W A S D للمشي":"اختر Walk للدخول"}</small>
+    </div>
+
+    <div className="approvedRoomStrip">
+      {rooms.slice(0,6).map((room:any,i:number)=><button key={room.id||i}>
+        <span className="approvedRoomThumb"><img src={"/api/uploads/"+id+"/file"} alt=""/></span>
+        <b>{"فراغ "+(i+1)}</b><small>{fmt(room.areaM2)} م²</small>
+      </button>)}
+      <Link href={"/project/"+id}>▦<span>المزيد</span></Link>
+    </div>
+
+    <footer className="approved3dFooter">
+      <div><span>إجمالي المساحة المقروءة</span><b>{fmt(rooms.reduce((s:number,r:any)=>s+(Number(r.areaM2)||0),0))} م²</b></div>
+      <div><span>عدد الجدران</span><b>{walls}</b></div>
+      <div><span>عدد الفتحات</span><b>{openings}</b></div>
+      <nav>
+        <Link href={"/project/"+id}>⌗ المخطط</Link>
+        <Link href={"/project/"+id+"/materials"}>▦ المواد والتشطيبات</Link>
+        <Link href={"/project/"+id+"/materials"}>▣ المنتجات</Link>
+      </nav>
+    </footer>
   </main>;
 }
