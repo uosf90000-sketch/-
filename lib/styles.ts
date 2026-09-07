@@ -1,0 +1,42 @@
+export const designStyles = [
+  {
+    id: "Saudi Contemporary",
+    name: "معاصر سعودي",
+    description: "خامات طبيعية، دفء، وتفاصيل محلية.",
+    image: "/images/majlis.webp",
+    position: "center",
+    size: "cover",
+  },
+  {
+    id: "Warm Minimal",
+    name: "دافئ وبسيط",
+    description: "ألوان هادئة ومساحات تتنفس.",
+    image: "/images/styles.webp",
+    position: "100% 0%",
+    size: "200% 200%",
+  },
+  {
+    id: "Modern",
+    name: "عصري",
+    description: "خطوط واضحة وتفاصيل متوازنة.",
+    image: "/images/styles.webp",
+    position: "0% 0%",
+    size: "200% 200%",
+  },
+  {
+    id: "Luxury",
+    name: "فاخر",
+    description: "حضور الحجر والخشب والتفاصيل.",
+    image: "/images/styles.webp",
+    position: "0% 100%",
+    size: "200% 200%",
+  },
+  {
+    id: "Japandi",
+    name: "جاباندي",
+    description: "بساطة هادئة وملمس طبيعي.",
+    image: "/images/styles.webp",
+    position: "100% 100%",
+    size: "200% 200%",
+  },
+];
