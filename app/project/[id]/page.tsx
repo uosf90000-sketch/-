@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import Header from "@/components/Header";
@@ -8,10 +8,11 @@ import PlanPreview from "@/components/PlanPreview";
 import PlanMap from "@/components/PlanMap";
 import Icon from "@/components/ui/Icon";
 import { rememberProject } from "@/lib/client/projects";
+import { applyPlanReview, emptyReview, mergeOpenings } from "@/lib/plan-review";
 export default function PlanPage() {
   const { id } = useParams<{ id: string }>();
   const [upload, setUpload] = useState<any>(null),
-    [analysis, setAnalysis] = useState<any>(null),
+    [rawAnalysis, setAnalysis] = useState<any>(null),
     [rooms, setRooms] = useState<any[]>([]),
     [doors, setDoors] = useState<any[]>([]),
     [health, setHealth] = useState<any>(null),
@@ -20,6 +21,9 @@ export default function PlanPage() {
     [error, setError] = useState(""),
     [readingNames, setReadingNames] = useState(false),
     [styleQuery, setStyleQuery] = useState("");
+  const [review, setReview] = useState(emptyReview);
+  const [nameData, setNameData] = useState<any>(null);
+  const analysis = useMemo(() => applyPlanReview(rawAnalysis, review, nameData), [rawAnalysis, review, nameData]);
   useEffect(() => {
     const chosen = new URLSearchParams(window.location.search).get("style");
     if (chosen) setStyleQuery("?style=" + encodeURIComponent(chosen));
@@ -33,8 +37,9 @@ export default function PlanPage() {
       fetch("/api/uploads/" + id + "/rooms").then((r) => r.json()),
       fetch("/api/uploads/" + id + "/doors").then((r) => r.json()),
       fetch("/api/health").then((r) => r.json()),
+      fetch("/api/uploads/" + id + "/review").then((r) => r.json()),
     ])
-      .then(([u, a, rs, ds, h]) => {
+      .then(([u, a, rs, ds, h, rv]) => {
         if (!live) return;
         if (u.ok) {
           setUpload(u.upload);
@@ -42,6 +47,8 @@ export default function PlanPage() {
         } else setError("لم نعثر على هذا المشروع.");
         if (a.ok) setAnalysis(a.analysis);
         setRooms(rs.rooms?.rooms || []);
+        setNameData(rs.rooms || null);
+        if (rv.ok) setReview(rv.review);
         setDoors(ds.doors?.doors || []);
         setHealth(h);
       })
@@ -92,14 +99,12 @@ export default function PlanPage() {
       const response = await fetch("/api/rooms", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ uploadId: id }),
+        body: JSON.stringify({ uploadId: id, alignment: (() => { try { return JSON.parse(localStorage.getItem("bayti-overlay-v3:/api/uploads/" + id + "/file") || "null"); } catch { return null; } })() }),
       });
       const body = await response.json();
-      if (!response.ok || !body.ok)
-        throw new Error(
-          "تعذر التعرف على أسماء الغرف الآن. يمكنك متابعة استكشاف المساحات.",
-        );
+      if (!response.ok || !body.ok) throw new Error(body.error || "تعذر قراءة أسماء الغرف.");
       setRooms(body.rooms || []);
+      setNameData(body);
     } catch (e) {
       setError(e instanceof Error ? e.message : "تعذر قراءة أسماء الغرف.");
     } finally {
@@ -108,24 +113,19 @@ export default function PlanPage() {
   }
   const wallCount =
     analysis?.ifcPlan?.walls?.length || analysis?.scanCounts?.walls || 0;
-  const openings = analysis?.ifcPlan?.openings || [];
+  const openings = mergeOpenings(analysis?.ifcPlan?.walls || [], analysis?.ifcPlan?.openings || [], doors, review.removed);
   const ready = Boolean(analysis?.ifcPlan?.walls?.length);
   const image = ["png", "jpg", "jpeg", "webp"].includes(upload?.extension);
   const resultCounts = [
-    ["غرف", rooms.length || analysis?.inferredRooms?.length || 0],
+    ["مساحات", analysis?.inferredRooms?.length || rooms.length || 0],
     ["جدران", wallCount],
     [
       "أبواب",
-      Math.max(
-        doors.length,
-        openings.filter((o: any) => o.kind === "door").length,
-      ),
+      openings.filter((o: any) => o.kind === "door").length,
     ],
     [
       "نوافذ",
-      openings.filter((o: any) => o.kind === "window").length ||
-        analysis?.scanCounts?.windows ||
-        0,
+      openings.filter((o: any) => o.kind === "window").length,
     ],
   ];
   return (
@@ -147,7 +147,7 @@ export default function PlanPage() {
           <h1>{ready ? "أهلًا بملامح منزلك." : "كل التفاصيل تبدأ هنا."}</h1>
           <p>
             {ready
-              ? "راجع المخطط، ثم شاهد منزلك من بُعد جديد."
+              ? "القراءة الآلية قد تفوّت بعض التفاصيل. راجع الفتحات وأسماء الغرف قبل الانتقال إلى 3D."
               : "مخططك أمامك. لنكتشف ما وراء الخطوط."}
           </p>
         </div>
@@ -188,6 +188,9 @@ export default function PlanPage() {
                     analysis={analysis}
                     rooms={rooms}
                     uploadId={id}
+                    onReviewSaved={setReview}
+                    onDoorsDetected={setDoors}
+                    detectedDoors={doors}
                   />
                 ) : ready ? (
                   <PlanMap analysis={analysis} />
@@ -285,13 +288,13 @@ export default function PlanPage() {
                   </>
                 )}
                 {ready && image && (
-                  <details className="bt-more">
+                  <details className="bt-more" open>
                     <summary>أسماء الغرف</summary>
                     <p>تعرّف إلى أسماء المساحات المكتوبة في المخطط.</p>
                     <button
                       className="bt-button secondary wide"
                       onClick={readNames}
-                      disabled={readingNames}
+                      disabled={readingNames || health?.openaiConfigured === false}
                     >
                       {readingNames ? "نقرأ أسماء الغرف…" : "قراءة أسماء الغرف"}
                     </button>

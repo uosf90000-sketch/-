@@ -1,4 +1,5 @@
 "use client";
+import { mergeOpenings } from "@/lib/plan-review";
 
 import { Canvas } from "@react-three/fiber";
 import { RoundedBox } from "@react-three/drei";
@@ -427,20 +428,8 @@ export default function RealHouse3D({
     ? analysis.ifcPlan.openings
     : EMPTY_SCENE;
   const openings = useMemo(
-    () => [
-      ...providerOpenings,
-      ...detectedDoors.map((d: any) => ({
-        kind: "door",
-        wallEntityId: Number(d.wallEntityId),
-        position: Number(d.position),
-        widthM: Number(d.widthM) || 0.9,
-        heightM: 2.1,
-        sillM: 0,
-        confidence: Number(d.confidence) || 0.6,
-        source: "bayti-door-arc",
-      })),
-    ],
-    [providerOpenings, detectedDoors],
+    () => mergeOpenings(walls, providerOpenings, detectedDoors, analysis?.reviewRemoved || []),
+    [walls, providerOpenings, detectedDoors, analysis?.reviewRemoved],
   );
   const items: DesignItem[] = Array.isArray(design?.design?.items)
     ? design.design.items
