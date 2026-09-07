@@ -1,4 +1,5 @@
 "use client";
+import { applyPlanReview, emptyReview } from "@/lib/plan-review";
 import { Component, useEffect, useMemo, useState, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -188,14 +189,16 @@ export default function SpatialWorkspace({
       fetch("/api/uploads/" + id + "/design").then((r) => r.json()),
       fetch("/api/uploads/" + id + "/doors").then((r) => r.json()),
       fetch("/api/health").then((r) => r.json()),
+      fetch("/api/uploads/" + id + "/review").then((r) => r.json()),
+      fetch("/api/uploads/" + id + "/rooms").then((r) => r.json()),
     ])
-      .then(([u, a, d, ds, h]) => {
+      .then(([u, a, d, ds, h, rv, rs]) => {
         if (!live) return;
         if (u.ok) {
           setUpload(u.upload);
           rememberProject(u.upload);
         }
-        if (a.ok) setAnalysis(a.analysis);
+        if (a.ok) setAnalysis(applyPlanReview(a.analysis, rv.ok ? rv.review : emptyReview, rs.rooms));
         if (d.ok) {
           setDesign(d.design);
           if (designStyles.some((s) => s.id === d.design?.design?.style))

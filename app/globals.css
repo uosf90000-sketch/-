@@ -3096,3 +3096,13 @@ hr {
     height: 90px;
   }
 }
+
+/* Plan corrections remain reachable on touch screens and with the keyboard. */
+.bt-plan-tools { flex-wrap: wrap; }
+.bt-plan-tools button { min-height: 44px; }
+.bt-plan-tools button[aria-pressed="true"] { background: var(--olive); color: white; }
+.bt-plan-edit { position: fixed; bottom: 90px; left: 16px; right: 16px; margin: 0 auto; max-width: 520px; max-height: 60dvh; overflow-y: auto; z-index: 60; }
+.bt-plan-edit form { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; width: 100%; }
+.bt-plan-edit label { display: grid; gap: 8px; flex: 1; min-width: 120px; }
+.bt-plan-edit input { width: 100%; min-height: 44px; border: 1px solid var(--line); border-radius: 8px; padding: 10px; font: inherit; }
+.bt-plan-edit button:not([aria-label]) { position: static; width: auto; height: auto; min-height: 44px; font-size: .875rem; }

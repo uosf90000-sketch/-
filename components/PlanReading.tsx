@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { detectDoorsFromAlignedRaster, type DetectedDoor } from "@/lib/client/detect-doors";
+import type { DetectedDoor } from "@/lib/client/detect-doors";
+import { detectDoorsInWorker } from "@/lib/client/detect-doors-worker";
+
+import { mergeOpenings, openingKey, openingHostAt, type PlanReview } from "@/lib/plan-review";
 
 type RoomBox={
   name:string;
@@ -141,11 +144,17 @@ export default function PlanReading({
   analysis,
   rooms,
   uploadId,
+  onReviewSaved,
+  onDoorsDetected,
+  detectedDoors,
 }: {
   imageUrl: string;
   analysis: any;
   rooms: RoomBox[];
   uploadId: string;
+  onReviewSaved: (review: PlanReview) => void;
+  onDoorsDetected: (doors: any[]) => void;
+  detectedDoors: DetectedDoor[];
 }) {
   const scanProject = analysis?.scan?.project || {};
   const scale = scanProject?.scanScale || {};
@@ -169,25 +178,40 @@ export default function PlanReading({
   const [alignment, setAlignment] = useState<Alignment | null>(null);
   const [aligning, setAligning] = useState(walls.length > 0);
   const [alignError, setAlignError] = useState(false);
-  const [detectedDoors, setDetectedDoors] = useState<DetectedDoor[]>([]);
   const [detectingDoors, setDetectingDoors] = useState(false);
 
   const imageWidth = rasterSize?.width || num(scale.imageWidth) || 1000;
   const imageHeight = rasterSize?.height || num(scale.imageHeight) || 1400;
 
+  const [addMode, setAddMode] = useState<"door" | "window" | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editWidth, setEditWidth] = useState("0.9");
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState("");
+  const combinedOpenings = mergeOpenings(walls, openings, detectedDoors, analysis?.reviewRemoved || []);
+  const supplementalDoors = combinedOpenings.filter(o => !openings.some((p: any) => openingKey(p) === openingKey(o)));
+  async function saveCorrection(action: any) {
+    if (saving) return;
+    setSaving(true); setEditError("");
+    try {
+      const response = await fetch(`/api/uploads/${uploadId}/review`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(action) });
+      const body = await response.json();
+      if (!response.ok || !body.ok) throw new Error(body.error || "تعذر حفظ التصحيح.");
+      onReviewSaved(body.review); setSelected(null); setAddMode(null);
+    } catch (error) { setEditError(error instanceof Error ? error.message : "تعذر حفظ التصحيح."); }
+    finally { setSaving(false); }
+  }
+
   const providerDoorCount =
     openings.filter((o: any) => o.kind === "door").length ||
     num(ifcCounts.doors) ||
     num(scanCounts.doors);
-  const doorCount = Math.max(providerDoorCount, detectedDoors.length);
-  const windowCount =
-    openings.filter((o: any) => o.kind === "window").length ||
-    num(ifcCounts.windows) ||
-    num(scanCounts.windows);
+  const doorCount = combinedOpenings.filter(o => o.kind === "door").length;
+  const windowCount = combinedOpenings.filter(o => o.kind === "window").length;
   const wallCount =
     walls.length || num(ifcCounts.walls) || num(scanCounts.walls);
   const roomCount =
-    rooms.length || inferredRooms.length || num(ifcCounts.spaces);
+    inferredRooms.length || rooms.length || num(ifcCounts.spaces);
 
   const bounds = useMemo(() => {
     let minX = Infinity,
@@ -215,18 +239,8 @@ export default function PlanReading({
   }, [walls]);
 
   useEffect(() => {
-    if (!uploadId) return;
-    fetch(`/api/uploads/${uploadId}/doors`)
-      .then(async (r) => (r.ok ? await r.json() : null))
-      .then((body) => {
-        const saved = body?.doors?.doors;
-        if (Array.isArray(saved)) setDetectedDoors(saved);
-      })
-      .catch(() => {});
-  }, [uploadId]);
-
-  useEffect(() => {
     let cancelled = false;
+    const abortController = new AbortController();
     if (!bounds.valid || !imageUrl) {
       setAligning(false);
       return;
@@ -267,7 +281,7 @@ export default function PlanReading({
         bounds.maxY,
       );
 
-      setTimeout(() => {
+      setTimeout(async () => {
         if (cancelled) return;
         const result = autoAlign(field, w, h, samples);
         if (result) {
@@ -281,10 +295,18 @@ export default function PlanReading({
 
           setDetectingDoors(true);
           try {
-            const doors = detectDoorsFromAlignedRaster({
-              pixels,
-              width: w,
-              height: h,
+            // Alignment stays fast at 720px; arc evidence retains fine strokes.
+            const detailRatio = Math.min(1, 1600 / Math.max(naturalW, naturalH));
+            const detail = document.createElement("canvas");
+            detail.width = Math.round(naturalW * detailRatio);
+            detail.height = Math.round(naturalH * detailRatio);
+            const detailContext = detail.getContext("2d", { willReadFrequently: true });
+            if (!detailContext) throw new Error("canvas unavailable");
+            detailContext.drawImage(img, 0, 0, detail.width, detail.height);
+            const doors = await detectDoorsInWorker({
+              pixels: detailContext.getImageData(0, 0, detail.width, detail.height).data,
+              width: detail.width,
+              height: detail.height,
               alignment: result,
               bounds: {
                 minX: bounds.minX,
@@ -294,17 +316,20 @@ export default function PlanReading({
               },
               walls,
               knownOpenings: openings,
-            });
+            }, abortController.signal);
             if (!cancelled) {
-              setDetectedDoors(doors);
-              if (uploadId) {
-                void fetch(`/api/uploads/${uploadId}/doors`, {
-                  method: "POST",
-                  headers: { "content-type": "application/json" },
-                  body: JSON.stringify({ doors }),
-                }).catch(() => {});
-              }
+              const savedResponse = await fetch(`/api/uploads/${uploadId}/doors`, {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ doors }),
+              });
+              const saved = await savedResponse.json();
+              if (!savedResponse.ok || !saved.ok) throw new Error("لم نتمكن من حفظ اقتراحات الأبواب. أعد المحاولة قبل فتح 3D.");
+              if (!cancelled) onDoorsDetected(saved.doors);
+
             }
+          } catch (error) {
+            if (!cancelled) setEditError(error instanceof Error ? error.message : "تعذر قراءة الأبواب.");
           } finally {
             if (!cancelled) setDetectingDoors(false);
           }
@@ -337,6 +362,7 @@ export default function PlanReading({
 
     return () => {
       cancelled = true;
+      abortController.abort();
     };
   }, [
     imageUrl,
@@ -388,7 +414,7 @@ export default function PlanReading({
             : alignError
               ? "المحاذاة تحتاج مراجعة"
               : analysis?.scanStatus === "ready"
-                ? "✓ القراءة والمحاذاة جاهزة"
+                ? "✓ المحاذاة جاهزة — راجع التفاصيل"
                 : "نستكمل تفاصيل المنزل"}
         </div>
       </div>
@@ -432,13 +458,31 @@ export default function PlanReading({
           −
         </button>
         <button onClick={() => setZoom(1)}>إعادة ضبط</button>
+        <button disabled={!active || saving} aria-pressed={addMode === "door"} onClick={() => { setAddMode("door"); setSelected(null); setEditError(""); setShowOverlay(true); }}>إضافة باب</button>
+        <button disabled={!active || saving} aria-pressed={addMode === "window"} onClick={() => { setAddMode("window"); setSelected(null); setEditError(""); setShowOverlay(true); }}>إضافة نافذة</button>
       </div>
+      {addMode && <p className="bt-muted" role="status">اضغط على منتصف {addMode === "door" ? "الباب" : "النافذة"} على الجدار، ثم راجع العرض واحفظ. <button className="bt-text-button" onClick={() => { setAddMode(null); setSelected(null); }}>إلغاء</button></p>}
+      {editError && <p className="bt-error" role="alert">{editError}</p>}
       <div className="planOverlayWrap">
         <svg
           viewBox={`0 0 ${imageWidth} ${imageHeight}`}
           className="planOverlaySvg"
           style={{ width: `${zoom * 100}%`, maxWidth: "none" }}
           preserveAspectRatio="xMidYMid meet"
+          onClickCapture={(event) => {
+            if (!addMode || !active || saving) return;
+            event.stopPropagation();
+            const svg = event.currentTarget;
+            const matrix = svg.getScreenCTM();
+            if (!matrix) return;
+            const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
+            const x = bounds.minX + (point.x / imageWidth - active.left) / active.width * (bounds.maxX - bounds.minX);
+            const y = bounds.maxY - (point.y / imageHeight - active.top) / active.height * (bounds.maxY - bounds.minY);
+            const nearest = openingHostAt(walls, x, y);
+            if (!nearest || nearest.distance > .65) { setEditError("اضغط بالقرب من الجدار الذي تقع عليه الفتحة."); return; }
+            setEditError(""); setEditWidth(nearest.wall.source === "user-confirmed-gap" ? Math.hypot(nearest.wall.x2-nearest.wall.x1, nearest.wall.y2-nearest.wall.y1).toFixed(3) : addMode === "door" ? "0.9" : "1.2");
+            setSelected({ draft: { kind: addMode, wallEntityId: nearest.wall.entityId, position: nearest.position, point: { x, y }, host: nearest.wall }, name: addMode === "door" ? "باب جديد" : "نافذة جديدة", detail: "راجع العرض قبل الحفظ. سيظهر التصحيح في المخطط و3D." });
+          }}
         >
           <image
             href={imageUrl}
@@ -451,7 +495,6 @@ export default function PlanReading({
 
           {showOverlay &&
             active &&
-            rooms.length === 0 &&
             hasIfc &&
             inferredRooms.map((room: any, i: number) => {
               const points = Array.isArray(room?.polygon) ? room.polygon : [];
@@ -466,12 +509,10 @@ export default function PlanReading({
               return (
                 <g
                   key={room.id || i}
-                  onClick={() =>
-                    setSelected({
-                      name: room.name || "غرفة " + (i + 1),
-                      detail: Number(room.areaM2 || 0).toFixed(1) + " م²",
-                    })
-                  }
+                  onClick={() => {
+                    setEditName(room.name || ""); setEditError("");
+                    setSelected({ roomId: String(room.id), name: room.name || "غرفة " + (i + 1), detail: Number(room.areaM2 || 0).toFixed(1) + " م²" });
+                  }}
                 >
                   <polygon
                     points={pts}
@@ -480,9 +521,9 @@ export default function PlanReading({
                     strokeWidth={1.5}
                   />
                   <rect
-                    x={cx - 42}
+                    x={cx - (room.name ? Math.max(84, room.name.length * 8) : 84) / 2}
                     y={cy - 15}
-                    width={84}
+                    width={room.name ? Math.max(84, room.name.length * 8) : 84}
                     height={30}
                     rx={9}
                     fill="rgba(21,28,34,.82)"
@@ -495,15 +536,15 @@ export default function PlanReading({
                     fontSize={13}
                     fontWeight="700"
                   >
-                    {room?.areaM2
+                    {room.name || (room?.areaM2
                       ? Number(room.areaM2).toFixed(1) + " م²"
-                      : "فراغ " + String(i + 1)}
+                      : "فراغ " + String(i + 1))}
                   </text>
                 </g>
               );
             })}
 
-          {showOverlay &&
+          {showOverlay && !inferredRooms.length &&
             rooms.map((room, i) => {
               const x = (room.bbox.x / 1000) * imageWidth;
               const y = (room.bbox.y / 1000) * imageHeight;
@@ -603,6 +644,7 @@ export default function PlanReading({
                 <circle
                   onClick={() =>
                     setSelected({
+                      opening,
                       name: opening.kind === "door" ? "باب" : "نافذة",
                       detail:
                         "العرض " +
@@ -625,7 +667,7 @@ export default function PlanReading({
           {showOverlay &&
             active &&
             hasIfc &&
-            detectedDoors.map((door: any, i: number) => {
+            supplementalDoors.map((door: any, i: number) => {
               const host = wallById.get(Number(door.wallEntityId));
               if (!host) return null;
               const t = Math.max(0, Math.min(1, num(door.position)));
@@ -633,7 +675,7 @@ export default function PlanReading({
               const y = num(host.y1) + (num(host.y2) - num(host.y1)) * t;
               const r = Math.max(5, imageWidth * 0.007);
               return (
-                <g key={`door-${door.wallEntityId}-${i}`}>
+                <g key={`door-${door.wallEntityId}-${i}`} onClick={() => setSelected({ opening: door, name: "باب مقترح", detail: "راجع موضع الباب قبل اعتماد النموذج." })}>
                   <circle
                     cx={tx(x)}
                     cy={ty(y)}
@@ -655,6 +697,12 @@ export default function PlanReading({
                 </g>
               );
             })}
+          {selected?.draft && active && (() => {
+            const wall = wallById.get(selected.draft.wallEntityId) || selected.draft.host;
+            if (!wall) return null;
+            const t = selected.draft.position;
+            return <circle cx={tx(wall.x1 + (wall.x2 - wall.x1) * t)} cy={ty(wall.y1 + (wall.y2 - wall.y1) * t)} r={imageWidth * .014} fill="none" stroke="#b27633" strokeWidth={3} />;
+          })()}
         </svg>
 
         {aligning && (
@@ -695,9 +743,18 @@ export default function PlanReading({
       </div>
 
       {selected && (
-        <div className="bt-map-detail" role="status">
+        <div className="bt-map-detail bt-plan-edit" role="region" aria-label="تصحيح العنصر">
           <b>{selected.name}</b>
           <span>{selected.detail}</span>
+          {selected.roomId && <form onSubmit={e => { e.preventDefault(); void saveCorrection({ type: "room", roomId: selected.roomId, name: editName }); }}>
+            <label>اسم الغرفة <input value={editName} maxLength={80} required onChange={e => setEditName(e.target.value)} placeholder="مثال: مجلس النساء" /></label>
+            <button className="bt-button" disabled={saving}>{saving ? "نحفظ…" : "حفظ الاسم"}</button>
+          </form>}
+          {selected.draft && <form onSubmit={e => { e.preventDefault(); void saveCorrection({ type: "opening", opening: { ...selected.draft, widthM: Number(editWidth) } }); }}>
+            <label>العرض بالمتر <input type="number" min="0.4" max="4" step="0.001" required value={editWidth} onChange={e => setEditWidth(e.target.value)} /></label>
+            <button className="bt-button" disabled={saving}>{saving ? "نحفظ…" : "حفظ الفتحة"}</button>
+          </form>}
+          {selected.opening && <button className="bt-text-button" disabled={saving} onClick={() => void saveCorrection({ type: "remove", key: openingKey(selected.opening) })}>ليست فتحة — إزالة</button>}
           <button aria-label="إغلاق التفاصيل" onClick={() => setSelected(null)}>
             ×
           </button>
