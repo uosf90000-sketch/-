@@ -5,6 +5,8 @@ import Link from "next/link";
 import Header from "@/components/Header";
 import PlanReading from "@/components/PlanReading";
 import PlanPreview from "@/components/PlanPreview";
+import PlanComparison from "@/components/PlanComparison";
+import type { Section } from "@/lib/tectly/geometry";
 import PlanMap from "@/components/PlanMap";
 import Icon from "@/components/ui/Icon";
 import { rememberProject } from "@/lib/client/projects";
@@ -21,6 +23,7 @@ export default function PlanPage() {
     [error, setError] = useState(""),
     [readingNames, setReadingNames] = useState(false),
     [styleQuery, setStyleQuery] = useState("");
+  const [alignment, setAlignment] = useState<Section | null>(null);
   const [review, setReview] = useState(emptyReview);
   const [nameData, setNameData] = useState<any>(null);
   const analysis = useMemo(() => applyPlanReview(rawAnalysis, review, nameData), [rawAnalysis, review, nameData]);
@@ -189,6 +192,7 @@ export default function PlanPage() {
                     rooms={rooms}
                     uploadId={id}
                     onReviewSaved={setReview}
+                    onAlignmentReady={setAlignment}
                     onDoorsDetected={setDoors}
                     detectedDoors={doors}
                   />
@@ -317,6 +321,7 @@ export default function PlanPage() {
                 </a>
               </aside>
             </div>
+            <PlanComparison id={id} extension={upload.extension} analysis={analysis} alignment={alignment} configured={health?.tectlyConfigured === true} onReviewSaved={setReview} />
           </>
         )}
       </main>
