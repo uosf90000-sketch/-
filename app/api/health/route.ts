@@ -1,9 +1,15 @@
+import { tectlyConfig } from "@/lib/server/tectly/client";
 export async function GET(){
+  const tectly=tectlyConfig();
   const token=Boolean(process.env.BIMY_API_TOKEN);
   const baseUrl=process.env.BIMY_API_BASE_URL||"https://bimy.app";
   return Response.json({
     ok:true,
     service:"bayti-experimental",
+    build:process.env.RAILWAY_GIT_COMMIT_SHA || null,
+    tectlyConfigured:tectly.configured,
+    tectlyDisabled:tectly.disabled,
+    tectlyCredentialsPresent:Boolean(tectly.clientId && tectly.clientSecret),
     demo:process.env.BAYTI_DEMO_MODE!=="false",
     bimyTokenPresent:token,
     bimyBaseUrl:baseUrl,

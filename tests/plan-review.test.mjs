@@ -82,7 +82,7 @@ test("review endpoint persists corrections and rejects path traversal", async ()
   try {
     await mkdir(root + "/uploads/" + id, { recursive: true });
     await writeFile(root + "/uploads/" + id + "/analysis.json", JSON.stringify(analysis));
-    const source = (await readFile(new URL("../app/api/uploads/[id]/review/route.ts", import.meta.url), "utf8")).replace("@/lib/plan-review", new URL("../lib/plan-review.ts", import.meta.url).href);
+    const source = (await readFile(new URL("../app/api/uploads/[id]/review/route.ts", import.meta.url), "utf8")).replace("@/lib/plan-review", new URL("../lib/plan-review.ts", import.meta.url).href).replace("@/lib/server/json-store", new URL("../lib/server/json-store.ts", import.meta.url).href);
     const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
     const route = await import("data:text/javascript;base64," + Buffer.from(code).toString("base64"));
     const context = { params: Promise.resolve({ id }) };

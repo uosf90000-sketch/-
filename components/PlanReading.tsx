@@ -145,6 +145,7 @@ export default function PlanReading({
   rooms,
   uploadId,
   onReviewSaved,
+  onAlignmentReady,
   onDoorsDetected,
   detectedDoors,
 }: {
@@ -153,6 +154,7 @@ export default function PlanReading({
   rooms: RoomBox[];
   uploadId: string;
   onReviewSaved: (review: PlanReview) => void;
+  onAlignmentReady?: (alignment: Alignment | null) => void;
   onDoorsDetected: (doors: any[]) => void;
   detectedDoors: DetectedDoor[];
 }) {
@@ -249,6 +251,7 @@ export default function PlanReading({
     setAligning(true);
     setAlignError(false);
     setAlignment(null);
+    onAlignmentReady?.(null);
 
     const img = new Image();
     img.onload = () => {
@@ -286,6 +289,7 @@ export default function PlanReading({
         const result = autoAlign(field, w, h, samples);
         if (result) {
           setAlignment(result);
+          onAlignmentReady?.(result);
           try {
             localStorage.setItem(
               "bayti-overlay-v3:" + imageUrl,
