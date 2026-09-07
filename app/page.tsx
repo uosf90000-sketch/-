@@ -1,111 +1,164 @@
-"use client";
-
-import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-
-const House3D=dynamic(()=>import("@/components/House3D"),{ssr:false});
-const MAX_FILE_SIZE=25*1024*1024;
-
-export default function Home(){
-  const router=useRouter();
-  const inputRef=useRef<HTMLInputElement>(null);
-  const [file,setFile]=useState<File|null>(null);
-  const [uploading,setUploading]=useState(false);
-  const [error,setError]=useState("");
-
-  function chooseFile(){inputRef.current?.click()}
-  function onFileChange(e:React.ChangeEvent<HTMLInputElement>){
-    const picked=e.target.files?.[0]||null;
-    setError("");
-    if(!picked){setFile(null);return}
-    const ext=picked.name.split(".").pop()?.toLowerCase();
-    if(!ext||!["pdf","jpg","jpeg","png","webp","dxf","dwg"].includes(ext)){
-      setError("صيغة الملف غير مدعومة.");e.target.value="";setFile(null);return;
-    }
-    if(picked.size>MAX_FILE_SIZE){
-      setError("حجم الملف أكبر من 25MB.");e.target.value="";setFile(null);return;
-    }
-    setFile(picked);
-  }
-
-  async function uploadPlan(){
-    if(!file){chooseFile();return}
-    setUploading(true);setError("");
-    try{
-      const form=new FormData();form.append("plan",file);
-      const r=await fetch("/api/upload",{method:"POST",body:form});
-      const body=await r.json();
-      if(!r.ok||!body.ok)throw new Error(body.error||"فشل رفع المخطط");
-      router.push(body.projectUrl);
-    }catch(err){setError(err instanceof Error?err.message:"تعذر رفع المخطط")}
-    finally{setUploading(false)}
-  }
-
-  return <main className="approvedLanding">
-    <header className="approvedLandingNav">
-      <Link href="/" className="approvedLandingBrand">
-        <span className="approvedLogoMark">⌂</span>
-        <span><b>BAYTI</b><small>LIVING TWIN</small></span>
-      </Link>
-
-      <nav>
-        <a href="#how">المفهوم</a>
-        <a href="#features">التصميم</a>
-        <a href="#library">المكتبة</a>
-        <a href="#support">الدعم</a>
-      </nav>
-
-      <div className="approvedLandingActions">
-        <Link href="/dashboard">لوحة التحكم</Link>
-        <button>☰</button>
-      </div>
-    </header>
-
-    <section className="approvedLandingHero">
-      <div className="approvedLandingBackdrop"/>
-      <div className="approvedLandingHeroCopy">
-        <span className="approvedHeroEyebrow">من صورة إلى منزل قابل للاستكشاف</span>
-        <h1>حوّل مخططك إلى <em>Living Twin</em></h1>
-        <p>من صورة إلى نموذج ثلاثي الأبعاد، ثم تصميم داخلي وتجربة تفاعلية كاملة.</p>
-
-        <input ref={inputRef} className="fileInput" type="file"
-          accept=".pdf,.jpg,.jpeg,.png,.webp,.dxf,.dwg,application/pdf,image/jpeg,image/png,image/webp"
-          onChange={onFileChange}/>
-
-        <div className="approvedHeroUpload">
-          <button type="button" className="approvedHeroUploadMain" onClick={chooseFile}>
-            <span className="approvedHeroUploadText">
-              <b>{file?file.name:"ارفع مخططك الآن"}</b>
-              <small>{file?(file.size/1024/1024).toFixed(2)+" MB":"JPG · PNG · PDF · DXF · IFC"}</small>
-            </span>
-            <span className="approvedUploadIcon">↥</span>
-          </button>
-          {file&&<button className="approvedAnalyzeBtn" onClick={uploadPlan} disabled={uploading}>
-            {uploading?"جاري إنشاء المشروع…":"ابدأ التحليل ←"}
-          </button>}
+import Header, { Brand } from "@/components/Header";
+import Icon from "@/components/ui/Icon";
+import BeforeAfter from "@/components/BeforeAfter";
+export default function Home() {
+  return (
+    <div className="bt-app">
+      <Header />
+      <main id="main-content">
+        <section className="bt-hero">
+          <div className="bt-hero-copy">
+            <span className="bt-eyebrow">منزل يشبهك، من أول فكرة.</span>
+            <h1>
+              من مخطط…
+              <br />
+              إلى بيت تعيشه
+              <br />
+              <em>قبل أن تبنيه.</em>
+            </h1>
+            <p>
+              ارفع مخطط منزلك، وصممه واستكشفه.
+              <br />
+              شاهد المساحات، والمس الخامات، وتخيّل حياتك فيه.
+            </p>
+            <div className="bt-hero-actions">
+              <Link className="bt-button" href="/upload">
+                ابدأ بمخططك <Icon name="arrow" />
+              </Link>
+              <a className="bt-button secondary" href="#how">
+                <Icon name="play" /> شاهد كيف يعمل
+              </a>
+            </div>
+            <small className="bt-formats" dir="ltr">
+              PNG · JPG · PDF · DXF · DWG
+            </small>
+          </div>
+          <div className="bt-hero-image">
+            <img
+              src="/images/villa.webp"
+              alt="مدخل فيلا سعودية معاصرة بالحجر الطبيعي والنخيل"
+              fetchPriority="high"
+            />
+            <div className="bt-image-caption">
+              <span>كل بيت، قصة أجمل.</span>
+              <small>مساحات تعكس أسلوب حياتك</small>
+            </div>
+          </div>
+        </section>
+        <div className="bt-values">
+          <span>
+            <Icon name="home" />
+            تصميم بروح سعودية
+          </span>
+          <span>
+            <Icon name="layers" />
+            من الفكرة إلى المساحة
+          </span>
+          <span>
+            <Icon name="compass" />
+            أنت صاحب التفاصيل
+          </span>
         </div>
-        {error&&<div className="approvedHeroError">{error}</div>}
-      </div>
-
-      <div className="approvedHeroDollhouse">
-        <div className="approvedBlueprintSheet"/>
-        <div className="approvedDollhouseFrame"><House3D mode="overview"/></div>
-      </div>
-
-      <div className="approvedHeroStats">
-        <span><b>دقائق</b><small>من المخطط إلى التوأم</small></span>
-        <span><b>3D حي</b><small>قابل للدوران والمشي</small></span>
-        <span><b>مواد حقيقية</b><small>تربط لاحقًا بمكتبتك</small></span>
-      </div>
-    </section>
-
-    <section className="approvedLandingFeatures" id="features">
-      <div><i>01</i><b>افهم المخطط</b><small>BIMy + IFC + محاذاة حقيقية</small></div>
-      <div><i>02</i><b>صمّم المساحات</b><small>OpenAI يختار التوزيع والمواد</small></div>
-      <div><i>03</i><b>استكشف البيت</b><small>Dollhouse + Walk + Orbit</small></div>
-      <div><i>04</i><b>جهّزه</b><small>الأثاث والإنارة والتكييف والتشطيبات</small></div>
-    </section>
-  </main>;
+        <section className="bt-section bt-transform" id="experience">
+          <div className="bt-section-heading">
+            <div>
+              <span className="bt-eyebrow">شاهد الفكرة تأخذ شكلها</span>
+              <h2>مخططك هو البداية فقط.</h2>
+            </div>
+            <p>
+              حرّك الفاصل لتستكشف المنزل نفسه
+              <br />
+              من المخطط إلى ثلاثي الأبعاد.
+            </p>
+          </div>
+          <BeforeAfter />
+          <div className="bt-section-foot">
+            <small>منزل تجريبي يوضح التجربة، وليس نتيجة لمخططك.</small>
+            <Link href="/project/demo" className="bt-text-link">
+              استكشف المنزل التجريبي <Icon name="arrow" />
+            </Link>
+          </div>
+        </section>
+        <section className="bt-section" id="how">
+          <div className="bt-section-heading">
+            <div>
+              <span className="bt-eyebrow">خطوة أقرب إلى منزلك</span>
+              <h2>رحلة تبدأ بورقة.</h2>
+            </div>
+          </div>
+          <div className="bt-story">
+            {[
+              {
+                n: "01",
+                t: "ارفع مخططك",
+                d: "صورة أو ملف. هنا تبدأ الحكاية.",
+                icon: "upload",
+              },
+              {
+                n: "02",
+                t: "نفهم المنزل",
+                d: "الجدران، الفتحات، والمساحات.",
+                icon: "layers",
+              },
+              {
+                n: "03",
+                t: "شاهد منزلك",
+                d: "أبعاد تتحول إلى مساحة أمامك.",
+                icon: "cube",
+              },
+              {
+                n: "04",
+                t: "اختر التصميم",
+                d: "خامات وأثاث يناسبان أسلوبك.",
+                icon: "spark",
+              },
+              {
+                n: "05",
+                t: "ادخل منزلك",
+                d: "تجوّل، وتعرّف إلى كل تفصيلة.",
+                icon: "walk",
+              },
+            ].map((s) => (
+              <article key={s.n}>
+                <span className="bt-story-number">{s.n}</span>
+                <Icon name={s.icon as any} />
+                <h3>{s.t}</h3>
+                <p>{s.d}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+        <section className="bt-inspiration">
+          <img
+            src="/images/majlis.webp"
+            alt="مجلس معاصر بخامات طبيعية وأثاث عاجي"
+            loading="lazy"
+          />
+          <div>
+            <span className="bt-eyebrow">مساحة لذوقك</span>
+            <h2>
+              منزلك.
+              <br />
+              بكل ما يشبهك.
+            </h2>
+            <p>
+              دفء الخشب، هدوء الحجر، وضوء يدخل كل زاوية. اكتشف الاتجاه الذي
+              يناسبك.
+            </p>
+            <Link className="bt-button" href="/explore">
+              استكشف التصاميم <Icon name="arrow" />
+            </Link>
+          </div>
+        </section>
+      </main>
+      <footer className="bt-footer">
+        <Brand />
+        <span>من مخطط… إلى منزل.</span>
+        <Link href="/upload">
+          ابدأ حكاية منزلك <Icon name="arrow" />
+        </Link>
+      </footer>
+    </div>
+  );
 }

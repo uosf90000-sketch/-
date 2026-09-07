@@ -140,264 +140,569 @@ export default function PlanReading({
   imageUrl,
   analysis,
   rooms,
-  uploadId
-}:{
-  imageUrl:string;
-  analysis:any;
-  rooms:RoomBox[];
-  uploadId:string;
-}){
-  const scanProject=analysis?.scan?.project||{};
-  const scale=scanProject?.scanScale||{};
-  const plan=analysis?.ifcPlan||null;
-  const walls=Array.isArray(plan?.walls)?plan.walls:[];
-  const openings=Array.isArray(plan?.openings)?plan.openings:[];
-  const scanCounts=analysis?.scanCounts||scanProject?.scanProgress?.counts||{};
-  const ifcCounts=analysis?.ifcCounts||{};
-  const inferredRooms=Array.isArray(analysis?.inferredRooms)?analysis.inferredRooms:[];
+  uploadId,
+}: {
+  imageUrl: string;
+  analysis: any;
+  rooms: RoomBox[];
+  uploadId: string;
+}) {
+  const scanProject = analysis?.scan?.project || {};
+  const scale = scanProject?.scanScale || {};
+  const plan = analysis?.ifcPlan || null;
+  const walls = Array.isArray(plan?.walls) ? plan.walls : [];
+  const openings = Array.isArray(plan?.openings) ? plan.openings : [];
+  const scanCounts =
+    analysis?.scanCounts || scanProject?.scanProgress?.counts || {};
+  const ifcCounts = analysis?.ifcCounts || {};
+  const inferredRooms = Array.isArray(analysis?.inferredRooms)
+    ? analysis.inferredRooms
+    : [];
 
-  const [rasterSize,setRasterSize]=useState<{width:number;height:number}|null>(null);
-  const [alignment,setAlignment]=useState<Alignment|null>(null);
-  const [aligning,setAligning]=useState(walls.length>0);
-  const [alignError,setAlignError]=useState(false);
-  const [detectedDoors,setDetectedDoors]=useState<DetectedDoor[]>([]);
-  const [detectingDoors,setDetectingDoors]=useState(false);
+  const [selected, setSelected] = useState<any>(null);
+  const [zoom, setZoom] = useState(1);
+  const [showOverlay, setShowOverlay] = useState(true);
+  const [rasterSize, setRasterSize] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
+  const [alignment, setAlignment] = useState<Alignment | null>(null);
+  const [aligning, setAligning] = useState(walls.length > 0);
+  const [alignError, setAlignError] = useState(false);
+  const [detectedDoors, setDetectedDoors] = useState<DetectedDoor[]>([]);
+  const [detectingDoors, setDetectingDoors] = useState(false);
 
-  const imageWidth=rasterSize?.width||num(scale.imageWidth)||1000;
-  const imageHeight=rasterSize?.height||num(scale.imageHeight)||1400;
+  const imageWidth = rasterSize?.width || num(scale.imageWidth) || 1000;
+  const imageHeight = rasterSize?.height || num(scale.imageHeight) || 1400;
 
-  const providerDoorCount=openings.filter((o:any)=>o.kind==="door").length || num(ifcCounts.doors) || num(scanCounts.doors);
-  const doorCount=Math.max(providerDoorCount,detectedDoors.length);
-  const windowCount=openings.filter((o:any)=>o.kind==="window").length || num(ifcCounts.windows) || num(scanCounts.windows);
-  const wallCount=walls.length || num(ifcCounts.walls) || num(scanCounts.walls);
-  const roomCount=rooms.length || inferredRooms.length || num(ifcCounts.spaces);
+  const providerDoorCount =
+    openings.filter((o: any) => o.kind === "door").length ||
+    num(ifcCounts.doors) ||
+    num(scanCounts.doors);
+  const doorCount = Math.max(providerDoorCount, detectedDoors.length);
+  const windowCount =
+    openings.filter((o: any) => o.kind === "window").length ||
+    num(ifcCounts.windows) ||
+    num(scanCounts.windows);
+  const wallCount =
+    walls.length || num(ifcCounts.walls) || num(scanCounts.walls);
+  const roomCount =
+    rooms.length || inferredRooms.length || num(ifcCounts.spaces);
 
-  const bounds=useMemo(()=>{
-    let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
-    for(const w of walls){
-      for(const x of [num(w.x1),num(w.x2)]){minX=Math.min(minX,x);maxX=Math.max(maxX,x)}
-      for(const y of [num(w.y1),num(w.y2)]){minY=Math.min(minY,y);maxY=Math.max(maxY,y)}
+  const bounds = useMemo(() => {
+    let minX = Infinity,
+      minY = Infinity,
+      maxX = -Infinity,
+      maxY = -Infinity;
+    for (const w of walls) {
+      for (const x of [num(w.x1), num(w.x2)]) {
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+      }
+      for (const y of [num(w.y1), num(w.y2)]) {
+        minY = Math.min(minY, y);
+        maxY = Math.max(maxY, y);
+      }
     }
-    return {minX,minY,maxX,maxY,valid:walls.length>0&&Number.isFinite(minX)&&maxX>minX&&maxY>minY};
-  },[walls]);
+    return {
+      minX,
+      minY,
+      maxX,
+      maxY,
+      valid:
+        walls.length > 0 && Number.isFinite(minX) && maxX > minX && maxY > minY,
+    };
+  }, [walls]);
 
-  useEffect(()=>{
-    if(!uploadId)return;
+  useEffect(() => {
+    if (!uploadId) return;
     fetch(`/api/uploads/${uploadId}/doors`)
-      .then(async r=>r.ok?await r.json():null)
-      .then(body=>{
-        const saved=body?.doors?.doors;
-        if(Array.isArray(saved))setDetectedDoors(saved);
+      .then(async (r) => (r.ok ? await r.json() : null))
+      .then((body) => {
+        const saved = body?.doors?.doors;
+        if (Array.isArray(saved)) setDetectedDoors(saved);
       })
-      .catch(()=>{});
-  },[uploadId]);
+      .catch(() => {});
+  }, [uploadId]);
 
-  useEffect(()=>{
-    let cancelled=false;
-    if(!bounds.valid||!imageUrl){setAligning(false);return;}
+  useEffect(() => {
+    let cancelled = false;
+    if (!bounds.valid || !imageUrl) {
+      setAligning(false);
+      return;
+    }
 
     setAligning(true);
     setAlignError(false);
     setAlignment(null);
 
-    const img=new Image();
-    img.onload=()=>{
-      if(cancelled)return;
-      const naturalW=img.naturalWidth||num(scale.imageWidth)||1000;
-      const naturalH=img.naturalHeight||num(scale.imageHeight)||1400;
-      setRasterSize({width:naturalW,height:naturalH});
+    const img = new Image();
+    img.onload = () => {
+      if (cancelled) return;
+      const naturalW = img.naturalWidth || num(scale.imageWidth) || 1000;
+      const naturalH = img.naturalHeight || num(scale.imageHeight) || 1400;
+      setRasterSize({ width: naturalW, height: naturalH });
 
-      const maxSide=720;
-      const ratio=Math.min(1,maxSide/Math.max(naturalW,naturalH));
-      const w=Math.max(1,Math.round(naturalW*ratio));
-      const h=Math.max(1,Math.round(naturalH*ratio));
-      const canvas=document.createElement("canvas");
-      canvas.width=w;canvas.height=h;
-      const ctx=canvas.getContext("2d",{willReadFrequently:true});
-      if(!ctx){setAlignError(true);setAligning(false);return;}
-      ctx.drawImage(img,0,0,w,h);
-      const pixels=ctx.getImageData(0,0,w,h).data;
-      const field=localDarknessField(pixels,w,h);
-      const samples=buildWallSamples(walls,bounds.minX,bounds.minY,bounds.maxX,bounds.maxY);
+      const maxSide = 720;
+      const ratio = Math.min(1, maxSide / Math.max(naturalW, naturalH));
+      const w = Math.max(1, Math.round(naturalW * ratio));
+      const h = Math.max(1, Math.round(naturalH * ratio));
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) {
+        setAlignError(true);
+        setAligning(false);
+        return;
+      }
+      ctx.drawImage(img, 0, 0, w, h);
+      const pixels = ctx.getImageData(0, 0, w, h).data;
+      const field = localDarknessField(pixels, w, h);
+      const samples = buildWallSamples(
+        walls,
+        bounds.minX,
+        bounds.minY,
+        bounds.maxX,
+        bounds.maxY,
+      );
 
-      setTimeout(()=>{
-        if(cancelled)return;
-        const result=autoAlign(field,w,h,samples);
-        if(result){
+      setTimeout(() => {
+        if (cancelled) return;
+        const result = autoAlign(field, w, h, samples);
+        if (result) {
           setAlignment(result);
-          try{localStorage.setItem("bayti-overlay-v3:"+imageUrl,JSON.stringify(result))}catch{}
+          try {
+            localStorage.setItem(
+              "bayti-overlay-v3:" + imageUrl,
+              JSON.stringify(result),
+            );
+          } catch {}
 
           setDetectingDoors(true);
-          try{
-            const doors=detectDoorsFromAlignedRaster({
+          try {
+            const doors = detectDoorsFromAlignedRaster({
               pixels,
-              width:w,
-              height:h,
-              alignment:result,
-              bounds:{
-                minX:bounds.minX,
-                minY:bounds.minY,
-                maxX:bounds.maxX,
-                maxY:bounds.maxY
+              width: w,
+              height: h,
+              alignment: result,
+              bounds: {
+                minX: bounds.minX,
+                minY: bounds.minY,
+                maxX: bounds.maxX,
+                maxY: bounds.maxY,
               },
               walls,
-              knownOpenings:openings
+              knownOpenings: openings,
             });
-            if(!cancelled){
+            if (!cancelled) {
               setDetectedDoors(doors);
-              if(uploadId){
-                void fetch(`/api/uploads/${uploadId}/doors`,{
-                  method:"POST",
-                  headers:{"content-type":"application/json"},
-                  body:JSON.stringify({doors})
-                }).catch(()=>{});
+              if (uploadId) {
+                void fetch(`/api/uploads/${uploadId}/doors`, {
+                  method: "POST",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({ doors }),
+                }).catch(() => {});
               }
             }
-          }finally{
-            if(!cancelled)setDetectingDoors(false);
+          } finally {
+            if (!cancelled) setDetectingDoors(false);
           }
-        }else{
+        } else {
           setAlignError(true);
         }
         setAligning(false);
-      },20);
+      }, 20);
     };
-    img.onerror=()=>{if(!cancelled){setAlignError(true);setAligning(false)}};
-    img.src=imageUrl;
-
-    try{
-      const cached=localStorage.getItem("bayti-overlay-v3:"+imageUrl);
-      if(cached){
-        const parsed=JSON.parse(cached);
-        if(parsed&&Number.isFinite(parsed.left)&&Number.isFinite(parsed.width))setAlignment(parsed);
+    img.onerror = () => {
+      if (!cancelled) {
+        setAlignError(true);
+        setAligning(false);
       }
-    }catch{}
+    };
+    img.src = imageUrl;
 
-    return()=>{cancelled=true};
-  },[imageUrl,uploadId,walls,openings,bounds.valid,bounds.minX,bounds.minY,bounds.maxX,bounds.maxY,scale.imageWidth,scale.imageHeight]);
+    try {
+      const cached = localStorage.getItem("bayti-overlay-v3:" + imageUrl);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (
+          parsed &&
+          Number.isFinite(parsed.left) &&
+          Number.isFinite(parsed.width)
+        )
+          setAlignment(parsed);
+      }
+    } catch {}
 
-  const hasIfc=bounds.valid;
-  const active=alignment;
-  const tx=(x:number)=>{
-    if(!active||!hasIfc)return 0;
-    const u=(x-bounds.minX)/(bounds.maxX-bounds.minX);
-    return (active.left+u*active.width)*imageWidth;
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    imageUrl,
+    uploadId,
+    walls,
+    openings,
+    bounds.valid,
+    bounds.minX,
+    bounds.minY,
+    bounds.maxX,
+    bounds.maxY,
+    scale.imageWidth,
+    scale.imageHeight,
+  ]);
+
+  const hasIfc = bounds.valid;
+  const active = alignment;
+  const tx = (x: number) => {
+    if (!active || !hasIfc) return 0;
+    const u = (x - bounds.minX) / (bounds.maxX - bounds.minX);
+    return (active.left + u * active.width) * imageWidth;
   };
-  const ty=(y:number)=>{
-    if(!active||!hasIfc)return 0;
-    const v=1-(y-bounds.minY)/(bounds.maxY-bounds.minY);
-    return (active.top+v*active.height)*imageHeight;
+  const ty = (y: number) => {
+    if (!active || !hasIfc) return 0;
+    const v = 1 - (y - bounds.minY) / (bounds.maxY - bounds.minY);
+    return (active.top + v * active.height) * imageHeight;
   };
-  const pxPerMeter=active&&hasIfc
-    ? ((active.width*imageWidth)/(bounds.maxX-bounds.minX)+(active.height*imageHeight)/(bounds.maxY-bounds.minY))/2
-    : 0;
+  const pxPerMeter =
+    active && hasIfc
+      ? ((active.width * imageWidth) / (bounds.maxX - bounds.minX) +
+          (active.height * imageHeight) / (bounds.maxY - bounds.minY)) /
+        2
+      : 0;
 
-  const wallById=new Map<number,any>();
-  walls.forEach((w:any)=>wallById.set(w.entityId,w));
+  const wallById = new Map<number, any>();
+  walls.forEach((w: any) => wallById.set(w.entityId, w));
 
-  return <section className="readingCard">
-    <div className="readingHead">
-      <div>
-        <span className="kicker">قراءة المخطط</span>
-        <h2>ما الذي فهمه بيتي من المخطط؟</h2>
-        <p>الـIFC للهندسة والـ3D، وبيتي يحاذي الجدران تلقائيًا مع صورة المخطط الأصلية قبل عرضها.</p>
+  return (
+    <section className="readingCard">
+      <div className="readingHead">
+        <div>
+          <span className="kicker">قراءة المخطط</span>
+          <h2>ملامح منزلك</h2>
+          <p>راجع المساحات والفتحات على مخططك الأصلي.</p>
+        </div>
+        <div className="readingStatus">
+          {aligning
+            ? "جارٍ ضبط المحاذاة…"
+            : alignError
+              ? "المحاذاة تحتاج مراجعة"
+              : analysis?.scanStatus === "ready"
+                ? "✓ القراءة والمحاذاة جاهزة"
+                : "نستكمل تفاصيل المنزل"}
+        </div>
       </div>
-      <div className="readingStatus">
-        {aligning?"جارٍ ضبط المحاذاة…":alignError?"المحاذاة تحتاج مراجعة":analysis?.scanStatus==="ready"?"✓ القراءة والمحاذاة جاهزة":"قيد استكمال الهندسة"}
+
+      <div className="readingStats" aria-label="نتائج قراءة المخطط">
+        <div>
+          <span>الغرف/الفراغات</span>
+          <b>{roomCount}</b>
+        </div>
+        <div>
+          <span>الجدران</span>
+          <b>{wallCount}</b>
+        </div>
+        <div>
+          <span>الأبواب</span>
+          <b>{doorCount}</b>
+        </div>
+        <div>
+          <span>النوافذ</span>
+          <b>{windowCount}</b>
+        </div>
       </div>
-    </div>
 
-    <div className="readingStats">
-      <div><span>الغرف/الفراغات</span><b>{roomCount}</b></div>
-      <div><span>الجدران</span><b>{wallCount}</b></div>
-      <div><span>الأبواب</span><b>{doorCount}</b></div>
-      <div><span>النوافذ</span><b>{windowCount}</b></div>
-    </div>
+      <div className="bt-plan-tools">
+        <button
+          aria-pressed={showOverlay}
+          onClick={() => setShowOverlay((v) => !v)}
+        >
+          {showOverlay ? "إخفاء التحديد" : "إظهار التحديد"}
+        </button>
+        <button
+          aria-label="تقريب المخطط"
+          onClick={() => setZoom((z) => Math.min(3, z + 0.25))}
+        >
+          +
+        </button>
+        <button
+          aria-label="إبعاد المخطط"
+          onClick={() => setZoom((z) => Math.max(1, z - 0.25))}
+        >
+          −
+        </button>
+        <button onClick={() => setZoom(1)}>إعادة ضبط</button>
+      </div>
+      <div className="planOverlayWrap">
+        <svg
+          viewBox={`0 0 ${imageWidth} ${imageHeight}`}
+          className="planOverlaySvg"
+          style={{ width: `${zoom * 100}%`, maxWidth: "none" }}
+          preserveAspectRatio="xMidYMid meet"
+        >
+          <image
+            href={imageUrl}
+            x="0"
+            y="0"
+            width={imageWidth}
+            height={imageHeight}
+            opacity="0.64"
+          />
 
-    <div className="planOverlayWrap">
-      <svg viewBox={`0 0 ${imageWidth} ${imageHeight}`} className="planOverlaySvg" preserveAspectRatio="xMidYMid meet">
-        <image href={imageUrl} x="0" y="0" width={imageWidth} height={imageHeight} opacity="0.64"/>
+          {showOverlay &&
+            active &&
+            rooms.length === 0 &&
+            hasIfc &&
+            inferredRooms.map((room: any, i: number) => {
+              const points = Array.isArray(room?.polygon) ? room.polygon : [];
+              if (points.length < 3) return null;
+              const pts = points
+                .map(
+                  (p: any) => String(tx(num(p.x))) + "," + String(ty(num(p.y))),
+                )
+                .join(" ");
+              const cx = tx(num(room?.center?.x));
+              const cy = ty(num(room?.center?.y));
+              return (
+                <g
+                  key={room.id || i}
+                  onClick={() =>
+                    setSelected({
+                      name: room.name || "غرفة " + (i + 1),
+                      detail: Number(room.areaM2 || 0).toFixed(1) + " م²",
+                    })
+                  }
+                >
+                  <polygon
+                    points={pts}
+                    fill="rgba(126,144,114,.08)"
+                    stroke="rgba(126,144,114,.38)"
+                    strokeWidth={1.5}
+                  />
+                  <rect
+                    x={cx - 42}
+                    y={cy - 15}
+                    width={84}
+                    height={30}
+                    rx={9}
+                    fill="rgba(21,28,34,.82)"
+                  />
+                  <text
+                    x={cx}
+                    y={cy + 5}
+                    textAnchor="middle"
+                    fill="#fff"
+                    fontSize={13}
+                    fontWeight="700"
+                  >
+                    {room?.areaM2
+                      ? Number(room.areaM2).toFixed(1) + " م²"
+                      : "فراغ " + String(i + 1)}
+                  </text>
+                </g>
+              );
+            })}
 
-        {active&&rooms.length===0&&hasIfc&&inferredRooms.map((room:any,i:number)=>{
-          const points=Array.isArray(room?.polygon)?room.polygon:[];
-          if(points.length<3)return null;
-          const pts=points.map((p:any)=>String(tx(num(p.x)))+","+String(ty(num(p.y)))).join(" ");
-          const cx=tx(num(room?.center?.x));
-          const cy=ty(num(room?.center?.y));
-          return <g key={room.id||i}>
-            <polygon points={pts} fill="rgba(89,180,221,.07)" stroke="rgba(89,180,221,.38)" strokeWidth={1.5}/>
-            <rect x={cx-42} y={cy-15} width={84} height={30} rx={9} fill="rgba(21,28,34,.82)"/>
-            <text x={cx} y={cy+5} textAnchor="middle" fill="#fff" fontSize={13} fontWeight="700">
-              {room?.areaM2 ? Number(room.areaM2).toFixed(1)+" م²" : "فراغ "+String(i+1)}
-            </text>
-          </g>;
-        })}
+          {showOverlay &&
+            rooms.map((room, i) => {
+              const x = (room.bbox.x / 1000) * imageWidth;
+              const y = (room.bbox.y / 1000) * imageHeight;
+              const w = (room.bbox.width / 1000) * imageWidth;
+              const h = (room.bbox.height / 1000) * imageHeight;
+              return (
+                <g
+                  key={`${room.name}-${i}`}
+                  onClick={() =>
+                    setSelected({
+                      name: room.name,
+                      detail: "المساحة تظهر عند توفر أبعاد الغرفة",
+                    })
+                  }
+                >
+                  <rect
+                    x={x}
+                    y={y}
+                    width={w}
+                    height={h}
+                    rx={8}
+                    fill="rgba(89,180,221,.08)"
+                    stroke="rgba(89,180,221,.34)"
+                    strokeWidth={2}
+                  />
+                  <rect
+                    x={x + 5}
+                    y={y + 5}
+                    width={Math.max(70, room.name.length * 13)}
+                    height={28}
+                    rx={8}
+                    fill="rgba(21,28,34,.82)"
+                  />
+                  <text
+                    x={x + 13}
+                    y={y + 24}
+                    fill="#fff"
+                    fontSize={15}
+                    fontWeight="700"
+                  >
+                    {room.name}
+                  </text>
+                </g>
+              );
+            })}
 
-        {rooms.map((room,i)=>{
-          const x=room.bbox.x/1000*imageWidth;
-          const y=room.bbox.y/1000*imageHeight;
-          const w=room.bbox.width/1000*imageWidth;
-          const h=room.bbox.height/1000*imageHeight;
-          return <g key={`${room.name}-${i}`}>
-            <rect x={x} y={y} width={w} height={h} rx={8}
-              fill="rgba(89,180,221,.08)" stroke="rgba(89,180,221,.34)" strokeWidth={2}/>
-            <rect x={x+5} y={y+5} width={Math.max(70,room.name.length*13)} height={28} rx={8}
-              fill="rgba(21,28,34,.82)"/>
-            <text x={x+13} y={y+24} fill="#fff" fontSize={15} fontWeight="700">{room.name}</text>
-          </g>;
-        })}
+          {showOverlay &&
+            active &&
+            hasIfc &&
+            walls.map((wall: any) => {
+              const width = Math.max(3, num(wall.thickness) * pxPerMeter * 0.7);
+              return (
+                <line
+                  onClick={() =>
+                    setSelected({
+                      name: "جدار",
+                      detail:
+                        Math.hypot(
+                          wall.x2 - wall.x1,
+                          wall.y2 - wall.y1,
+                        ).toFixed(2) +
+                        " م · السماكة " +
+                        Number(wall.thickness || 0).toFixed(2) +
+                        " م",
+                    })
+                  }
+                  key={wall.entityId}
+                  x1={tx(num(wall.x1))}
+                  y1={ty(num(wall.y1))}
+                  x2={tx(num(wall.x2))}
+                  y2={ty(num(wall.y2))}
+                  stroke="#7e9072"
+                  strokeWidth={width}
+                  strokeLinecap="square"
+                  opacity=".92"
+                />
+              );
+            })}
 
-        {active&&hasIfc&&walls.map((wall:any)=>{
-          const width=Math.max(3,num(wall.thickness)*pxPerMeter*.7);
-          return <line key={wall.entityId}
-            x1={tx(num(wall.x1))} y1={ty(num(wall.y1))}
-            x2={tx(num(wall.x2))} y2={ty(num(wall.y2))}
-            stroke="#58c5ef" strokeWidth={width} strokeLinecap="square" opacity=".92"/>;
-        })}
+          {showOverlay &&
+            active &&
+            hasIfc &&
+            openings.map((opening: any, i: number) => {
+              const host = wallById.get(opening.wallEntityId);
+              if (!host) return null;
+              const t = Math.max(0, Math.min(1, num(opening.position)));
+              const x = num(host.x1) + (num(host.x2) - num(host.x1)) * t;
+              const y = num(host.y1) + (num(host.y2) - num(host.y1)) * t;
+              const color =
+                opening.kind === "door"
+                  ? "#f1d28f"
+                  : opening.kind === "window"
+                    ? "#071729"
+                    : "#f4c95d";
+              const radius = Math.max(4, imageWidth * 0.006);
+              return (
+                <circle
+                  onClick={() =>
+                    setSelected({
+                      name: opening.kind === "door" ? "باب" : "نافذة",
+                      detail:
+                        "العرض " +
+                        Number(opening.widthM || 0).toFixed(2) +
+                        " م · الجدار " +
+                        opening.wallEntityId,
+                    })
+                  }
+                  key={i}
+                  cx={tx(x)}
+                  cy={ty(y)}
+                  r={radius}
+                  fill={color}
+                  stroke="#fff"
+                  strokeWidth={1.5}
+                />
+              );
+            })}
 
-        {active&&hasIfc&&openings.map((opening:any,i:number)=>{
-          const host=wallById.get(opening.wallEntityId);
-          if(!host)return null;
-          const t=Math.max(0,Math.min(1,num(opening.position)));
-          const x=num(host.x1)+(num(host.x2)-num(host.x1))*t;
-          const y=num(host.y1)+(num(host.y2)-num(host.y1))*t;
-          const color=opening.kind==="door"?"#f1d28f":opening.kind==="window"?"#071729":"#f4c95d";
-          const radius=Math.max(4,imageWidth*.006);
-          return <circle key={i} cx={tx(x)} cy={ty(y)} r={radius} fill={color} stroke="#fff" strokeWidth={1.5}/>;
-        })}
+          {showOverlay &&
+            active &&
+            hasIfc &&
+            detectedDoors.map((door: any, i: number) => {
+              const host = wallById.get(Number(door.wallEntityId));
+              if (!host) return null;
+              const t = Math.max(0, Math.min(1, num(door.position)));
+              const x = num(host.x1) + (num(host.x2) - num(host.x1)) * t;
+              const y = num(host.y1) + (num(host.y2) - num(host.y1)) * t;
+              const r = Math.max(5, imageWidth * 0.007);
+              return (
+                <g key={`door-${door.wallEntityId}-${i}`}>
+                  <circle
+                    cx={tx(x)}
+                    cy={ty(y)}
+                    r={r}
+                    fill="#f1d28f"
+                    stroke="#3b3023"
+                    strokeWidth={1.5}
+                  />
+                  <text
+                    x={tx(x)}
+                    y={ty(y) + 4}
+                    textAnchor="middle"
+                    fill="#33281c"
+                    fontSize={Math.max(9, r * 0.95)}
+                    fontWeight="800"
+                  >
+                    D
+                  </text>
+                </g>
+              );
+            })}
+        </svg>
 
-        {active&&hasIfc&&detectedDoors.map((door:any,i:number)=>{
-          const host=wallById.get(Number(door.wallEntityId));
-          if(!host)return null;
-          const t=Math.max(0,Math.min(1,num(door.position)));
-          const x=num(host.x1)+(num(host.x2)-num(host.x1))*t;
-          const y=num(host.y1)+(num(host.y2)-num(host.y1))*t;
-          const r=Math.max(5,imageWidth*.007);
-          return <g key={`door-${door.wallEntityId}-${i}`}>
-            <circle cx={tx(x)} cy={ty(y)} r={r} fill="#f1d28f" stroke="#3b3023" strokeWidth={1.5}/>
-            <text x={tx(x)} y={ty(y)+4} textAnchor="middle" fill="#33281c" fontSize={Math.max(9,r*.95)} fontWeight="800">D</text>
-          </g>;
-        })}
-      </svg>
+        {aligning && (
+          <div className="overlayAlignNotice">
+            جارٍ مطابقة الجدران مع صورة المخطط…
+          </div>
+        )}
+        {detectingDoors && !aligning && (
+          <div className="overlayAlignNotice">
+            جارٍ قراءة أقواس الأبواب من المخطط…
+          </div>
+        )}
+        {alignError && (
+          <div className="overlayAlignNotice error">
+            هذا الجزء من المخطط يحتاج مراجعة. جرّب نسخة أوضح لإظهار التحديد
+            بدقة.
+          </div>
+        )}
+      </div>
 
-      {aligning&&<div className="overlayAlignNotice">جارٍ مطابقة الجدران مع صورة المخطط…</div>}
-      {detectingDoors&&!aligning&&<div className="overlayAlignNotice">جارٍ قراءة أقواس الأبواب من المخطط…</div>}
-      {alignError&&<div className="overlayAlignNotice error">لم أعرض خطوطًا مزيوطة. المحاذاة الآلية لم تتجاوز حد الثقة.</div>}
-    </div>
+      <div className="readingLegend">
+        <span>
+          <i className="legendWall" />
+          جدار
+        </span>
+        <span>
+          <i className="legendDoor" />
+          باب
+        </span>
+        <span>
+          <i className="legendWindow" />
+          نافذة
+        </span>
+        <span>
+          <i className="legendRoom" />
+          غرفة
+        </span>
+      </div>
 
-    <div className="readingLegend">
-      <span><i className="legendWall"/>جدار BIM/IFC بعد المحاذاة</span>
-      <span><i className="legendDoor"/>باب</span>
-      <span><i className="legendWindow"/>نافذة</span>
-      <span><i className="legendRoom"/>غرفة/فراغ هندسي</span>
-    </div>
-
-    <div className="readingFoot">
-      <span>المقياس: {scale?.metresPerPixel?Number(scale.metresPerPixel).toFixed(4)+" م/بكسل":"غير متوفر"}</span>
-      <span>الثقة BIMy: {typeof scale?.confidence==="number"?Math.round(scale.confidence*100)+"%":"—"}</span>
-      <span>المحاذاة: {active?Math.round(active.score/255*100)+"%":"—"}</span>
-      <span>الأبواب البصرية: {detectedDoors.length}</span>
-      <span>المصدر الهندسي: BIMy/IFC + Bayti Vision</span>
-    </div>
-  </section>;
+      {selected && (
+        <div className="bt-map-detail" role="status">
+          <b>{selected.name}</b>
+          <span>{selected.detail}</span>
+          <button aria-label="إغلاق التفاصيل" onClick={() => setSelected(null)}>
+            ×
+          </button>
+        </div>
+      )}
+    </section>
+  );
 }
