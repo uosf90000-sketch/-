@@ -10,6 +10,8 @@ export const maxDuration=300;
 
 const ROOT=process.env.RAILWAY_VOLUME_MOUNT_PATH || "/data";
 
+function bimyBase(value:string|undefined){ return (value??"https://bimy.app").trim().replace(/\/+$/,"").replace(/\/api$/i,""); }
+
 function cleanToken(value:string|undefined){
   const token=(value??"").replace(/\s+/g,"");
   if((token.startsWith('"')&&token.endsWith('"'))||(token.startsWith("'")&&token.endsWith("'"))) return token.slice(1,-1);
@@ -90,7 +92,7 @@ export async function POST(request:Request){
   const uploadId=input?.uploadId;
   if(typeof uploadId !== "string" || !/^[a-f0-9-]{36}$/i.test(uploadId)) return Response.json({ok:false,error:"uploadId مطلوب."},{status:400});
 
-  const base=(process.env.BIMY_API_BASE_URL??"https://bimy.app").replace(/\/+$/,"");
+  const base=bimyBase(process.env.BIMY_API_BASE_URL);
   const token=cleanToken(process.env.BIMY_API_TOKEN);
   if(!token) return Response.json({ok:false,error:"BIMY_API_TOKEN غير مضاف."},{status:503});
 

@@ -2,7 +2,8 @@ import { tectlyConfig } from "@/lib/server/tectly/client";
 export async function GET(){
   const tectly=tectlyConfig();
   const token=Boolean(process.env.BIMY_API_TOKEN);
-  const baseUrl=process.env.BIMY_API_BASE_URL||"https://bimy.app";
+  const configuredBase=process.env.BIMY_API_BASE_URL||"https://bimy.app";
+  const baseUrl=configuredBase.trim().replace(/\/+$/,"").replace(/\/api$/i,"");
   return Response.json({
     ok:true,
     service:"bayti-experimental",
