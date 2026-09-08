@@ -52,7 +52,9 @@ async function jsonRequest(base:string,token:string,endpoint:string,init:Request
   const headers=new Headers(init.headers);
   headers.set("Authorization",`Bearer ${token}`);
   if(!headers.has("Accept")) headers.set("Accept","application/json");
-  const response=await fetch(`${base}${endpoint}`,{...init,headers,cache:"no-store",redirect:"manual"});
+  let response: Response;
+  try { response=await fetch(`${base}${endpoint}`,{...init,headers,cache:"no-store",redirect:"manual",signal:AbortSignal.timeout(15000)}); }
+  catch(error:any) { const err:any=new Error("BIMy لم يستجب خلال ١٥ ثانية."); err.code="bimy_timeout"; throw err; }
   const ct=response.headers.get("content-type")||"";
   const body=ct.includes("application/json")?await response.json().catch(()=>null):{text:(await response.text().catch(()=>"")).slice(0,1000)};
   if(!response.ok){
@@ -149,26 +151,28 @@ export async function POST(request:Request){
 
     let scan:any=null;
     let status:string|null=null;
-    let scaleApplied=false;
-    for(let attempt=0;attempt<60;attempt++){
-      scan=await jsonRequest(base,token,`/api/projects/${encodeURIComponent(projectId)}/plan-scan`);
-      status=statusFromScan(scan);
-      if(status==="calibrating"&&!scaleApplied){
-        try{
-          const scaled=await jsonRequest(base,token,`/api/projects/${encodeURIComponent(projectId)}/plan-scan/scale`,{
-            method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({useDetected:true})
-          });
-          scaleApplied=true;
-          if(record(scaled)?.project) scan=scaled;
-          status=statusFromScan(scan);
-        }catch{}
-      }
-      if(status==="ready") break;
-      if(["error","failed","cancelled","canceled"].includes(status||"")) break;
-      await sleep(4000);
+    let scaleApplied=Boolean(state?.scaleApplied);
+    scan=await jsonRequest(base,token,`/api/projects/${encodeURIComponent(projectId)}/plan-scan`);
+    status=statusFromScan(scan);
+    if(status==="calibrating"&&!scaleApplied){
+      try{
+        const scaled=await jsonRequest(base,token,`/api/projects/${encodeURIComponent(projectId)}/plan-scan/scale`,{
+          method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({useDetected:true})
+        });
+        scaleApplied=true;
+        if(record(scaled)?.project) scan=scaled;
+        status=statusFromScan(scan);
+      }catch{}
     }
 
     const scanSummary=scanCounts(scan);
+    if(["error","failed","cancelled","canceled"].includes(status||"")) throw new Error("BIMy تعذر عليه إكمال قراءة المخطط. أعد المحاولة بعد قليل.");
+    if(status!=="ready") {
+      const pending={provider:"bimy",uploadId,bimyProjectId:projectId,status:"processing",scanStatus:status,scaleApplied,scan,scanCounts:scanSummary,updatedAt:new Date().toISOString()};
+      await writeFile(path.join(dir,"analysis.json"),JSON.stringify(pending,null,2),"utf8");
+      await writeFile(path.join(dir,"bimy-state.json"),JSON.stringify({...state,...pending},null,2),"utf8");
+      return Response.json({ok:true,pending:true,provider:"bimy",status:"processing",scanStatus:status,scanCounts:scanSummary,retryAfterMs:4000,result:pending});
+    }
     const resources={
       wall:await getResource(base,token,projectId,"wall"),
       door:await getResource(base,token,projectId,"door"),
@@ -247,6 +251,7 @@ export async function POST(request:Request){
     });
   }catch(error:any){
     if(error?.status === 401 || error?.status === 403) return Response.json({ok:false,code:"bimy_auth",error:"تعذر الاتصال بخدمة قراءة الجدران: مفتاح BIMy غير صالح أو لا يملك صلاحية القراءة. حدّث BIMY_API_TOKEN في إعدادات خدمة بيتي، ثم استكمل الطلب. ملفك محفوظ."},{status:502});
+    if(error?.code === "bimy_timeout") return Response.json({ok:false,code:"bimy_timeout",error:"خدمة BIMy لم ترد خلال ١٥ ثانية. لم نبدأ تحليلًا جديدًا؛ أعد المحاولة بعد قليل."},{status:504});
     return Response.json({ok:false,error:"تعذر استكمال قراءة الجدران. ملفك محفوظ ويمكنك استكمال الطلب لاحقًا."},{status:502});
   }
 }
