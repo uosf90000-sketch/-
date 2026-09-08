@@ -5,6 +5,7 @@ import { getTectlyClient, TectlyError } from "@/lib/server/tectly/client";
 import { runTectlyStep, publicTectlyState, type TectlyState } from "@/lib/server/tectly/flow";
 import { readJson, writeJson, withFileLock } from "@/lib/server/json-store";
 import { adoptTectlyElement } from "@/lib/tectly/adopt";
+import { fuseTectlyPlan } from "@/lib/tectly/fuse";
 import { emptyReview } from "@/lib/plan-review";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,10 +24,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const dir = path.join(root(), "uploads", id);
   try {
     const input = await request.json();
-    if (!["start", "poll", "adopt"].includes(input.action)) return Response.json({ ok: false, error: "طلب غير صالح." }, { status: 400 });
+    if (!["start", "poll", "adopt", "fuse"].includes(input.action)) return Response.json({ ok: false, error: "طلب غير صالح." }, { status: 400 });
     if (!await readJson(path.join(dir, "meta.json"))) return Response.json({ ok: false, error: "لم نعثر على المخطط." }, { status: 404 });
     return await withFileLock(path.join(dir, "tectly-state.json"), async () => {
-      if (input.action === "adopt") {
+      if (input.action === "adopt" || input.action === "fuse") {
         if (input.alignmentConfirmed !== true) return Response.json({ ok: false, error: "تأكد أولًا من تطابق الجدران الحالية مع صورة المخطط." }, { status: 409 });
         const state: TectlyState | null = await readJson(path.join(dir, "tectly-state.json"));
         const plan = state?.results.find(p => p.id === input.planId);
@@ -38,6 +39,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         return withFileLock(path.join(dir, "review.json"), async () => {
           const analysis = await readJson(path.join(dir, "analysis.json"));
           const review = await readJson(path.join(dir, "review.json"), emptyReview);
+          if (input.action === "fuse") {
+            const doors = await readJson(path.join(dir, "doors.json"));
+            const result = fuseTectlyPlan(plan, input.alignment, analysis, review, doors?.doors || []);
+            await writeJson(path.join(dir, "review.json"), result.review);
+            return Response.json({ ok: true, ...result });
+          }
           const updated = adoptTectlyElement(plan, input.element, input.alignment, analysis, review);
           await writeJson(path.join(dir, "review.json"), updated);
           return Response.json({ ok: true, review: updated });

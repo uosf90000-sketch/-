@@ -189,6 +189,13 @@ test('adoption endpoint requires alignment confirmation, verifies original bytes
     assert.equal(saved.openings.length, 1);
     const returned = await (await route.GET(new Request('http://localhost/tectly'), context)).json();
     assert.equal(JSON.stringify(returned).includes('private-project'), false);
+    payload.action = 'fuse';
+    const fused = await (await route.POST(request(), context)).json();
+    assert.equal(fused.ok, true);
+    assert.ok(fused.report.added > 0);
+    assert.deepEqual(JSON.parse(await readFile(dir + '/review.json', 'utf8')), fused.review);
+    const repeated = await (await route.POST(request(), context)).json();
+    assert.equal(repeated.report.added, 0);
     await writeFile(dir + '/plan.png', 'different-plan');
     assert.equal((await route.POST(request(), context)).status, 409);
   } finally {
