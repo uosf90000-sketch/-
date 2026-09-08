@@ -23,6 +23,7 @@ export function designPreferences(input: any, analysis: any) {
   )
     throw new Error("الغرفة المحددة غير موجودة.");
   const room = input.roomIndex === undefined ? null : rooms[input.roomIndex];
+  if (room && ["stairs", "elevator", "garage", "outdoor"].includes(room.type)) throw new Error("هذه مساحة درج أو خدمة أو مساحة خارجية؛ لا تُصمّم كغرفة سكنية.");
   const roomName = room ? room.name || "غرفة " + (input.roomIndex + 1) : null;
   return { style, room, roomName };
 }

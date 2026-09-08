@@ -1,3 +1,11 @@
+export function spaceType(name: string, type = "") {
+  const text = `${name} ${type}`.toLowerCase();
+  if (/درج|سلم|stair/.test(text)) return "stairs";
+  if (/مصعد|elevator|lift/.test(text)) return "elevator";
+  if (/حوش|فناء|حديقة|patio|garden|courtyard/.test(text)) return "outdoor";
+  if (/كراج|قراج|موقف|garage|parking/.test(text)) return "garage";
+  return type || "unknown";
+}
 export type PlanReview = { openings: any[]; removed: string[]; roomNames: Record<string, string>; walls?: any[] };
 export const emptyReview: PlanReview = { openings: [], removed: [], roomNames: {} };
 export function openingKey(o: any) {
@@ -28,8 +36,19 @@ export function applyPlanReview(analysis: any, review: PlanReview = emptyReview,
   return { ...analysis, reviewRemoved: review.removed,
     ifcPlan: { ...analysis.ifcPlan, walls, openings: mergeOpenings(walls, [...review.openings, ...(analysis.ifcPlan.openings || [])], [], review.removed) },
     inferredRooms: (analysis.inferredRooms || []).map((room: any) => {
+      const providerSpaces = (analysis.ifcPlan.spaces || []).filter((space: any) => {
+        let contained = false;
+        const poly = space.polygon || [], p = room.center;
+        if (!p) return false;
+        for (let i=0,j=poly.length-1;i<poly.length;j=i++) {
+          const a=poly[i], b=poly[j];
+          if ((a.y>p.y)!==(b.y>p.y) && p.x<(b.x-a.x)*(p.y-a.y)/(b.y-a.y)+a.x) contained=!contained;
+        }
+        return contained && space.name;
+      });
+      if (providerSpaces.length === 1) room = { ...room, name: providerSpaces[0].name, type: spaceType(providerSpaces[0].name), providerAreaM2: providerSpaces[0].areaM2 };
       const manual = review.roomNames[String(room.id)];
-      if (manual) return { ...room, name: manual };
+      if (manual) return { ...room, name: manual, type: spaceType(manual) };
       if (!a || !(maxX > minX && maxY > minY)) return room;
       const x = (a.left + (room.center.x - minX) / (maxX - minX) * a.width) * 1000;
       const y = (a.top + (1 - (room.center.y - minY) / (maxY - minY)) * a.height) * 1000;
@@ -38,7 +57,7 @@ export function applyPlanReview(analysis: any, review: PlanReview = emptyReview,
         .sort((p: any, q: any) => p.r.bbox.width * p.r.bbox.height - q.r.bbox.width * q.r.bbox.height);
       if (!candidates.length) return room;
       assigned.add(candidates[0].i);
-      return { ...room, name: candidates[0].r.name };
+      return { ...room, name: candidates[0].r.name, type: spaceType(candidates[0].r.name, candidates[0].r.type) };
     }) };
 }
 export function editReview(review: PlanReview, action: any, analysis: any): PlanReview {

@@ -55,7 +55,7 @@ function WallMesh({
   const intervals = openings
     .map((o) => {
       const width = Math.min(
-        length * 0.9,
+        length,
         Math.max(0.55, Number(o.widthM) || 0.9),
       );
       const center = Math.max(
@@ -165,9 +165,13 @@ function WallMesh({
                 <meshStandardMaterial color="#e4ddd1" roughness={0.82} />
               </mesh>
             ))}
-            <mesh
+            {Array.from({ length: o.kind === "door" && o.leafCount === 2 ? 2 : 1 }, (_, leaf) => {
+              const count = o.kind === "door" && o.leafCount === 2 ? 2 : 1;
+              const panelWidth = (o.end - o.start) / count;
+              const panel = localToWorld(o.start + panelWidth * (leaf + .5), 0);
+              return <mesh key={leaf}
               visible={!(walking && o.kind === "door")}
-              position={[p.x, sill + openH / 2, p.z]}
+              position={[panel.x, sill + openH / 2, panel.z]}
               rotation={[0, angle, 0]}
               onPointerOver={(e) => {
                 e.stopPropagation();
@@ -179,7 +183,7 @@ function WallMesh({
                 onSelect({
                   type: o.kind,
                   category: o.kind === "window" ? "نافذة" : "باب",
-                  name: o.kind === "window" ? "نافذة" : "باب",
+                  name: o.kind === "window" ? "نافذة" : o.leafCount === 2 ? "باب بضلفتين" : "باب",
                   widthM: o.end - o.start,
                   heightM: openH,
                   sillM: sill,
@@ -190,7 +194,7 @@ function WallMesh({
             >
               <boxGeometry
                 args={[
-                  Math.max(0.5, o.end - o.start),
+                  Math.max(0.05, panelWidth - (count === 2 ? .015 : 0)),
                   openH,
                   Math.max(0.025, thick * 0.18),
                 ]}
@@ -201,7 +205,8 @@ function WallMesh({
                 opacity={o.kind === "window" ? 0.42 : 1}
                 roughness={o.kind === "window" ? 0.28 : 0.65}
               />
-            </mesh>
+            </mesh>;
+            })}
           </group>
         );
       })}

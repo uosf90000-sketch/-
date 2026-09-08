@@ -1,6 +1,6 @@
 import { applyPlanReview, editReview, mergeOpenings, openingHostAt, type PlanReview } from '../plan-review';
 import { openingProposal, adoptTectlyElement } from './adopt';
-import { validSection, type ComparisonPlan, type Section } from './geometry';
+import { roomLabel, validSection, type ComparisonPlan, type Section } from './geometry';
 
 // Fuse saved observations only. Existing geometry and user corrections win conflicts.
 export function fuseTectlyPlan(plan: ComparisonPlan, alignment: Section, analysis: any, review: PlanReview, rasterDoors: any[] = []) {
@@ -44,7 +44,7 @@ export function fuseTectlyPlan(plan: ComparisonPlan, alignment: Section, analysi
     }
   }
   for (const room of plan.rooms) {
-    if (!room.caption.trim()) continue;
+    if (!room.caption.trim() && roomLabel(room) === "مساحة") continue;
     try {
       const next = adoptTectlyElement(plan, { kind: 'room', id: room.id }, alignment, analysis, updated);
       const entries = Object.entries(next.roomNames).filter(([id, name]) => !updated.roomNames[id] && name);

@@ -17,6 +17,7 @@
 
 import {
   entitiesOfType,
+  enumAt,
   listAt,
   numberAt,
   numbersAt,
@@ -43,6 +44,8 @@ export interface IfcWall {
 
 /** فتحة مقروءة من IFC، بالمتر */
 export interface IfcOpening {
+  operation?: string;
+  leafCount?: 1 | 2;
   /** الجدار الذي تُفرّغه، بمُعرَّف كيانه */
   wallEntityId: number;
   /** نسبة الموضع على طول محور الجدار 0..1 */
@@ -56,6 +59,7 @@ export interface IfcOpening {
 }
 
 export interface IfcPlan {
+  spaces?: { entityId: number; name: string | null; polygon: { x: number; y: number }[]; areaM2: number }[];
   walls: IfcWall[];
   openings: IfcOpening[];
   basis: string;
@@ -413,6 +417,7 @@ export function ifcToPlan(doc: IfcDocument, metersPerUnit: number): IfcPlan {
   return {
     walls,
     openings,
+    spaces: extractSpaces(doc, metersPerUnit),
     basis: basisParts.join(" "),
     // أعلى من DXF: هناك يبقى تمييز الجدار من غيره اجتهادًا بالطبقة،
     // وهنا الملف يصرّح بالنوع. ولا تبلغ ١: الغرف تبقى من الملء لأن
@@ -488,10 +493,12 @@ function extractOpenings(
           ? "window"
           : "unknown";
 
+    const operation = kind === "door" ? doorOperation(doc, fillerEntity) : undefined;
     openings.push({
+      ...(operation ? { operation, leafCount: operation.startsWith("DOUBLE_DOOR") ? 2 as const : 1 as const } : {}),
       wallEntityId,
       position: Math.max(0, Math.min(1, t)),
-      widthM: profile.x * metersPerUnit,
+      widthM: (numberAt(fillerEntity, 9) ?? profile.x) * metersPerUnit,
       heightM:
         body?.depth === null || body?.depth === undefined
           ? null
@@ -504,6 +511,47 @@ function extractOpenings(
   }
 
   return openings;
+}
+
+// Preserve explicit IFCSPACE labels and boundaries instead of discarding provider rooms.
+export function extractSpaces(doc: IfcDocument, units: number) {
+  const spaces = [];
+  for (const entity of entitiesOfType(doc, "IFCSPACE")) {
+    const shapes = representations(doc, refAt(entity, 6));
+    const solid = (shapes.get("Body") || []).find(e => e.type === "IFCEXTRUDEDAREASOLID");
+    if (!solid) continue;
+    const profileId = refAt(solid, 0), profile = profileId === null ? undefined : doc.entities.get(profileId);
+    if (!profile) continue;
+    const rect = rectangleProfile(profile);
+    let points: { x: number; y: number }[] = [];
+    if (rect) points = [{x:-rect.x/2,y:-rect.y/2},{x:rect.x/2,y:-rect.y/2},{x:rect.x/2,y:rect.y/2},{x:-rect.x/2,y:rect.y/2}];
+    else if (profile.type === "IFCARBITRARYCLOSEDPROFILEDEF") {
+      const curveId = refAt(profile, 2), curve = curveId === null ? undefined : doc.entities.get(curveId);
+      if (curve) points = curvePoints(doc, curve);
+    }
+    if (points.length < 3) continue;
+    let placement = compose(resolvePlacement(doc, refAt(entity, 5)), readAxisPlacement(doc, refAt(solid, 1)));
+    if (rect) placement = compose(placement, readAxisPlacement(doc, refAt(profile, 2)));
+    const polygon = points.map(p => { const q = apply(placement, p.x, p.y); return {x:q.x*units,y:q.y*units}; });
+    const areaM2 = Math.abs(polygon.reduce((sum, p, i) => { const q = polygon[(i+1)%polygon.length]; return sum+p.x*q.y-q.x*p.y; },0))/2;
+    if (areaM2 > .1) spaces.push({entityId:entity.id,name:stringAt(entity,8) || stringAt(entity,2),polygon,areaM2});
+  }
+  return spaces;
+}
+
+export function doorOperation(doc: IfcDocument, door: IfcEntity | undefined): string | undefined {
+  if (!door) return undefined;
+  let operation = enumAt(door, 11);
+  if (!operation || operation === "NOTDEFINED") {
+    for (const relation of entitiesOfType(doc, "IFCRELDEFINESBYTYPE")) {
+      if (!refsAt(relation, 4).includes(door.id)) continue;
+      const id = refAt(relation, 5);
+      const type = id === null ? undefined : doc.entities.get(id);
+      if (type?.type === "IFCDOORTYPE") operation = enumAt(type, 10);
+      if (type?.type === "IFCDOORSTYLE") operation = enumAt(type, 8);
+    }
+  }
+  return operation && operation !== "NOTDEFINED" && operation !== "USERDEFINED" ? operation : undefined;
 }
 
 /** هل يبدو النصّ ملف IFC؟ — بنيةٌ لا بايتات سحرية */
