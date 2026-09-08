@@ -14,7 +14,7 @@ export async function GET(){
   const base=bimyBase(process.env.BIMY_API_BASE_URL);
   if(!token) return Response.json({ok:false,status:"not_configured",message:"BIMy غير مهيأ: أضف BIMY_API_TOKEN في Railway."},{status:503});
   try{
-    const response=await fetch(`${base}/api/projects?limit=1&offset=0&sort=created&scope=all`,{
+    const response=await fetch(`${base}/api/projects/list?limit=1&offset=0&sort=created&scope=all`,{
       headers:{Authorization:`Bearer ${token}`,Accept:"application/json"},
       cache:"no-store",signal:AbortSignal.timeout(15000)
     });
