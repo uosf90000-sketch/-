@@ -40,4 +40,4 @@ export function worldPoint(p: Point, section: Section, alignment: Section, walls
   const [u, v] = imagePoint(p, section);
   return { x: minX + (u - alignment.left) / alignment.width * (maxX - minX), y: maxY - (v - alignment.top) / alignment.height * (maxY - minY) };
 }
-export const roomLabel = (room: { caption: string; type: string }) => room.caption || ({ LivingRoom: "صالة", Bedroom: "غرفة نوم", Bathroom: "حمام", Corridor: "ممر", Kitchen: "مطبخ", DiningRoom: "غرفة طعام", Office: "مكتب", Storage: "مستودع", Garage: "موقف سيارة", Patio: "فناء", Balcony: "شرفة" } as Record<string, string>)[room.type] || "مساحة";
+export const roomLabel = (room: { caption: string; type: string }) => room.caption || ({ Stairs: "درج", Staircase: "درج", Elevator: "مصعد", LivingRoom: "صالة", Bedroom: "غرفة نوم", Bathroom: "حمام", Corridor: "ممر", Kitchen: "مطبخ", DiningRoom: "غرفة طعام", Office: "مكتب", Storage: "مستودع", Garage: "موقف سيارة", Patio: "فناء", Balcony: "شرفة" } as Record<string, string>)[room.type] || "مساحة";

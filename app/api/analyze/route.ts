@@ -86,7 +86,7 @@ function scanCounts(scan:any){
 export async function POST(request:Request){
   const input=await request.json().catch(()=>({}));
   const uploadId=input?.uploadId;
-  if(!uploadId) return Response.json({ok:false,error:"uploadId مطلوب."},{status:400});
+  if(typeof uploadId !== "string" || !/^[a-f0-9-]{36}$/i.test(uploadId)) return Response.json({ok:false,error:"uploadId مطلوب."},{status:400});
 
   const base=(process.env.BIMY_API_BASE_URL??"https://bimy.app").replace(/\/+$/,"");
   const token=cleanToken(process.env.BIMY_API_TOKEN);
@@ -96,6 +96,24 @@ export async function POST(request:Request){
   await mkdir(dir,{recursive:true});
 
   try{
+    try {
+      const saved=JSON.parse(await readFile(path.join(dir,"analysis.json"),"utf8"));
+      if(saved?.ifcPlan?.walls?.length) {
+        try {
+          const doc=parseIfc(await readFile(path.join(dir,"model.ifc"),"utf8"));
+          const units=ifcLengthToMeters(doc);
+          if(units !== null) {
+            const fresh=ifcToPlan(doc,units);
+            // Reparse saved IFC only when the wall identities and geometry remain unchanged.
+            if(JSON.stringify(fresh.walls) === JSON.stringify(saved.ifcPlan.walls)) {
+              saved.ifcPlan=fresh;
+              await writeFile(path.join(dir,"analysis.json"),JSON.stringify(saved,null,2));
+            }
+          }
+        } catch {}
+        return Response.json({ok:true,result:saved,status:saved.status});
+      }
+    } catch {}
     const meta=JSON.parse(await readFile(path.join(dir,"meta.json"),"utf8"));
     const projectNameWanted=input?.name||`Bayti ${meta.name}`;
     let state:any=null;

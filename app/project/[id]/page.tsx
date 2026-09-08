@@ -1,11 +1,11 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import Header from "@/components/Header";
 import PlanReading from "@/components/PlanReading";
 import PlanPreview from "@/components/PlanPreview";
-import PlanComparison from "@/components/PlanComparison";
+
 import type { Section } from "@/lib/tectly/geometry";
 import PlanMap from "@/components/PlanMap";
 import Icon from "@/components/ui/Icon";
@@ -24,6 +24,10 @@ export default function PlanPage() {
     [readingNames, setReadingNames] = useState(false),
     [styleQuery, setStyleQuery] = useState("");
   const [alignment, setAlignment] = useState<Section | null>(null);
+  const alignmentRef = useRef<Section | null>(null);
+  const [readingMessage, setReadingMessage] = useState("");
+  const [usageConsent, setUsageConsent] = useState(false);
+  const acceptAlignment = (value: Section | null) => { alignmentRef.current = value; setAlignment(value); };
   const [review, setReview] = useState(emptyReview);
   const [nameData, setNameData] = useState<any>(null);
   const analysis = useMemo(() => applyPlanReview(rawAnalysis, review, nameData), [rawAnalysis, review, nameData]);
@@ -68,32 +72,60 @@ export default function PlanPage() {
   }, [id]);
   async function analyze() {
     if (busy) return;
-    setBusy(true);
-    setError("");
-    try {
-      await fetch("/api/bimy/recover", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ uploadId: id }),
-      });
-      const response = await fetch("/api/analyze", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ uploadId: id }),
-      });
+    setBusy(true); setError(""); setReadingMessage("نستعيد القراءة ونفهم تفاصيل المنزل…");
+    const request = async (url: string, data: any) => {
+      const response = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(data) });
       const body = await response.json();
-      if (!response.ok || !body.ok)
-        throw new Error(
-          "تعذر إكمال قراءة المخطط. حاول مرة أخرى أو ارفع نسخة أوضح.",
-        );
-      setAnalysis(body.result);
-    } catch (e) {
-      setError(
-        e instanceof Error ? e.message : "تعذر فهم هذا الجزء من المخطط.",
-      );
-    } finally {
-      setBusy(false);
-    }
+      if (!response.ok || !body.ok) throw new Error(body.error || "تعذر استكمال هذا الجزء من القراءة.");
+      return body;
+    };
+    try {
+      const endpoint = `/api/uploads/${id}/tectly`;
+      const readAdditional = async () => {
+        if (!health?.tectlyConfigured) return null;
+        const saved = await fetch(endpoint).then(r => r.json());
+        if (!saved.ok) throw new Error("تعذر استعادة القراءة المحفوظة.");
+        let state = saved.state;
+        if (!state && !usageConsent) throw new Error("وافق على استخدام رصيد القراءة لتشغيل التحليل المتكامل.");
+        if (!state) state = (await request(endpoint, { action: "start", confirmUsage: usageConsent })).state;
+        const deadline = Date.now() + 600000;
+        while (!["ready", "partial", "failed"].includes(state.stage) && Date.now() < deadline) {
+          await new Promise(resolve => setTimeout(resolve, 2500));
+          state = (await request(endpoint, { action: "poll" })).state;
+          if (state.stage === "uncertain") throw new Error(state.error || "الطلب محفوظ؛ استكمل لاحقًا دون رفع جديد.");
+        }
+        return state;
+      };
+      const results = await Promise.allSettled([
+        request("/api/analyze", { uploadId: id }).then(body => { setAnalysis(body.result); return body.result; }),
+        readAdditional()
+      ]);
+      const primary = results[0];
+      if (primary.status === "rejected") throw primary.reason;
+      if (!primary.value?.ifcPlan?.walls?.length) throw new Error("قراءة الجدران لم تكتمل؛ الطلب محفوظ. اضغط استكمال فهم المخطط لاحقًا.");
+      setReadingMessage("نطابق الفتحات والمساحات مع المخطط…");
+      for (let i = 0; !alignmentRef.current && i < 40; i++) await new Promise(resolve => setTimeout(resolve, 500));
+      const resolvedAlignment = alignmentRef.current;
+      const additional = results[1];
+      const warnings: string[] = [];
+      if (additional.status === "rejected") warnings.push(additional.reason?.message || "لم تكتمل القراءة الإضافية.");
+      else if (additional.value) {
+        const plans = additional.value.results || [];
+        if (plans.length === 1 && resolvedAlignment) {
+          const merged = await request(endpoint, { action: "fuse", planId: plans[0].id, alignment: resolvedAlignment, alignmentConfirmed: true });
+          setReview(merged.review);
+          if (merged.report.review.length) warnings.push(`${merged.report.review.length} عنصر يحتاج مراجعة موضعه أو نوعه على المخطط.`);
+        } else warnings.push(plans.length > 1 ? "الملف يحتوي أكثر من مخطط؛ ارفع كل مخطط منفصلًا لمطابقة دقيقة." : "لم تكتمل مطابقة القراءة الثانية؛ بقيت نتيجة الجدران محفوظة.");
+      }
+      if (health?.openaiConfigured && usageConsent && !nameData?.rooms?.length && resolvedAlignment) {
+        try {
+          const names = await request("/api/rooms", { uploadId: id, alignment: resolvedAlignment });
+          setRooms(names.rooms || []); setNameData(names);
+        } catch (e) { warnings.push(e instanceof Error ? e.message : "بعض أسماء المساحات تحتاج مراجعة."); }
+      }
+      setReadingMessage(warnings.length ? warnings.join(" ") : "اكتملت القراءة الموحدة. راجع التفاصيل على مخططك.");
+    } catch (e) { setError(e instanceof Error ? e.message : "تعذر استكمال القراءة. النتيجة السابقة محفوظة."); }
+    finally { setBusy(false); }
   }
   async function readNames() {
     setReadingNames(true);
@@ -192,7 +224,7 @@ export default function PlanPage() {
                     rooms={rooms}
                     uploadId={id}
                     onReviewSaved={setReview}
-                    onAlignmentReady={setAlignment}
+                    onAlignmentReady={acceptAlignment}
                     onDoorsDetected={setDoors}
                     detectedDoors={doors}
                   />
@@ -240,6 +272,8 @@ export default function PlanPage() {
                 ) : (
                   <p>نحوّل خطوط مخططك إلى مساحات يمكنك استكشافها.</p>
                 )}
+                <label className="bt-comparison-check"><input type="checkbox" checked={usageConsent} onChange={e => setUsageConsent(e.target.checked)} disabled={busy} />أوافق على استخدام رصيد خدمات القراءة عند الحاجة لتحليل جديد وقراءة الأسماء. النتائج المحفوظة تُستكمل دون إعادة رفع.</label>
+                {readingMessage && <p className="bt-muted" role="status">{readingMessage}</p>}
                 {error && (
                   <p className="bt-error" role="alert">
                     {error}
@@ -261,7 +295,7 @@ export default function PlanPage() {
                       onClick={analyze}
                       disabled={busy}
                     >
-                      إعادة قراءة المخطط
+                      استكمال فهم المخطط
                     </button>
                   </>
                 ) : (
@@ -292,7 +326,7 @@ export default function PlanPage() {
                   </>
                 )}
                 {ready && image && (
-                  <details className="bt-more" open>
+                  <details className="bt-more">
                     <summary>أسماء الغرف</summary>
                     <p>تعرّف إلى أسماء المساحات المكتوبة في المخطط.</p>
                     <button
@@ -321,7 +355,6 @@ export default function PlanPage() {
                 </a>
               </aside>
             </div>
-            <PlanComparison currentOpenings={openings} id={id} extension={upload.extension} analysis={analysis} alignment={alignment} configured={health?.tectlyConfigured === true} onReviewSaved={setReview} />
           </>
         )}
       </main>
