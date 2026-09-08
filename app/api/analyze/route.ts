@@ -127,7 +127,9 @@ export async function POST(request:Request){
         const listed=await jsonRequest(base,token,"/api/projects/list?limit=50&offset=0&sort=created&scope=all");
         const existing=itemsOf(listed).find((x:any)=>projectName(x)===projectNameWanted);
         projectId=projectIdOf(existing);
-      }catch{}
+      }catch(error:any){
+        if(error?.status === 401 || error?.status === 403) throw error;
+      }
     }
 
     if(!projectId){
@@ -244,6 +246,7 @@ export async function POST(request:Request){
       result:analysis
     });
   }catch(error:any){
-    return Response.json({ok:false,error:error?.message||"BIMy error"},{status:502});
+    if(error?.status === 401 || error?.status === 403) return Response.json({ok:false,code:"bimy_auth",error:"تعذر الاتصال بخدمة قراءة الجدران: مفتاح BIMy غير صالح أو لا يملك صلاحية القراءة. حدّث BIMY_API_TOKEN في إعدادات خدمة بيتي، ثم استكمل الطلب. ملفك محفوظ."},{status:502});
+    return Response.json({ok:false,error:"تعذر استكمال قراءة الجدران. ملفك محفوظ ويمكنك استكمال الطلب لاحقًا."},{status:502});
   }
 }

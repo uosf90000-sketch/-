@@ -96,9 +96,13 @@ export default function PlanPage() {
         }
         return state;
       };
+      const primaryTask = request("/api/analyze", { uploadId: id }).then(body => { setAnalysis(body.result); return body.result; });
       const results = await Promise.allSettled([
-        request("/api/analyze", { uploadId: id }).then(body => { setAnalysis(body.result); return body.result; }),
-        readAdditional()
+        primaryTask,
+        primaryTask.then(result => {
+          if (!result?.ifcPlan?.walls?.length) return null;
+          return readAdditional();
+        })
       ]);
       const primary = results[0];
       if (primary.status === "rejected") throw primary.reason;
