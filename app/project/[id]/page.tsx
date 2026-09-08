@@ -96,17 +96,22 @@ export default function PlanPage() {
         }
         return state;
       };
-      const primaryTask = request("/api/analyze", { uploadId: id }).then(body => { setAnalysis(body.result); return body.result; });
+      const primaryTask = request("/api/analyze", { uploadId: id }).then(body => { setAnalysis(body.result); return body; });
       const results = await Promise.allSettled([
         primaryTask,
         primaryTask.then(result => {
-          if (!result?.ifcPlan?.walls?.length) return null;
+          if (result.pending || !result.result?.ifcPlan?.walls?.length) return null;
           return readAdditional();
         })
       ]);
       const primary = results[0];
       if (primary.status === "rejected") throw primary.reason;
-      if (!primary.value?.ifcPlan?.walls?.length) throw new Error("قراءة الجدران لم تكتمل؛ الطلب محفوظ. اضغط استكمال فهم المخطط لاحقًا.");
+      if (primary.value.pending) {
+        setReadingMessage("BIMy يعالج المخطط الآن. سنفحص النتيجة مرة أخرى خلال ثوانٍ؛ يمكنك البقاء هنا أو العودة لاحقًا.");
+        window.setTimeout(() => void analyze(), Number(primary.value.retryAfterMs) || 4000);
+        return;
+      }
+      if (!primary.value.result?.ifcPlan?.walls?.length) throw new Error("قراءة الجدران لم تكتمل؛ الطلب محفوظ. اضغط استكمال فهم المخطط لاحقًا.");
       setReadingMessage("نطابق الفتحات والمساحات مع المخطط…");
       for (let i = 0; !alignmentRef.current && i < 40; i++) await new Promise(resolve => setTimeout(resolve, 500));
       const resolvedAlignment = alignmentRef.current;
