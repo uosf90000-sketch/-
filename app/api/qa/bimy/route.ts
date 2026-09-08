@@ -1,6 +1,8 @@
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
 
+function bimyBase(value:string|undefined){ return (value??"https://bimy.app").trim().replace(/\/+$/,"").replace(/\/api$/i,""); }
+
 function cleanToken(value:string|undefined){
   const token=(value??"").replace(/\s+/g,"");
   if((token.startsWith('"')&&token.endsWith('"'))||(token.startsWith("'")&&token.endsWith("'"))) return token.slice(1,-1);
@@ -9,7 +11,7 @@ function cleanToken(value:string|undefined){
 
 export async function GET(){
   const token=cleanToken(process.env.BIMY_API_TOKEN);
-  const base=(process.env.BIMY_API_BASE_URL??"https://bimy.app").replace(/\/+$/,"");
+  const base=bimyBase(process.env.BIMY_API_BASE_URL);
   if(!token) return Response.json({ok:false,status:"not_configured",message:"BIMy غير مهيأ: أضف BIMY_API_TOKEN في Railway."},{status:503});
   try{
     const response=await fetch(`${base}/api/projects?limit=1&offset=0&sort=created&scope=all`,{
