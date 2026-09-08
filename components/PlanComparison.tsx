@@ -4,14 +4,15 @@ import { imagePoint, roomLabel, validSection, type ComparisonPlan, type Section 
 import type { PlanReview } from "@/lib/plan-review";
 
 type State = { stage: string; results: ComparisonPlan[]; error?: string; completedPlans: number; planCount: number };
-export default function PlanComparison({ id, extension, analysis, alignment, configured, onReviewSaved }: {
+export default function PlanComparison({ id, extension, analysis, alignment, configured, onReviewSaved, currentOpenings = [] }: {
   id: string; extension: string; analysis: any; alignment: Section | null; configured: boolean;
-  onReviewSaved: (review: PlanReview) => void;
+  onReviewSaved: (review: PlanReview) => void; currentOpenings?: any[];
 }) {
   const [state, setState] = useState<State | null>(null), [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [message, setMessage] = useState("");
   const [connection, setConnection] = useState<"idle" | "connected" | "failed">("idle");
   const [consent, setConsent] = useState(false), [aligned, setAligned] = useState(false), [paused, setPaused] = useState(false);
+  const [fusionReview, setFusionReview] = useState<{ id: string; reason: string }[]>([]);
   const [zoom, setZoom] = useState(1);
   const [index, setIndex] = useState(0), [layer, setLayer] = useState<"both" | "bimy" | "tectly">("both");
   const [size, setSize] = useState({ width: 1000, height: 1400 });
@@ -61,6 +62,19 @@ export default function PlanComparison({ id, extension, analysis, alignment, con
     } catch (e) { setError(e instanceof Error ? e.message : "تعذر تشغيل القراءة الإضافية."); }
     finally { setBusy(false); }
   }
+  async function fuse() {
+    if (!plan || !alignment || !aligned || busy) return;
+    setBusy(true); setError("");
+    try {
+      const response = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "fuse", planId: plan.id, alignment, alignmentConfirmed: true }) });
+      const body = await response.json();
+      if (!response.ok || !body.ok) throw new Error(body.error || "تعذر دمج القراءتين.");
+      onReviewSaved(body.review);
+      setMessage(`تم الدمج: أضفنا ${body.report.added} فتحة و${body.report.named} اسم غرفة. ${body.report.matched} فتحة متطابقة، و${body.report.review.length} عنصر يحتاج مراجعة. بقيت الفتحات الحالية محفوظة.`);
+      setFusionReview(body.report.review);
+    } catch (e) { setError(e instanceof Error ? e.message : "تعذر الدمج."); }
+    finally { setBusy(false); }
+  }
   async function adopt() {
     if (!selected || !plan || !alignment || !aligned) return;
     setBusy(true); setError(""); setMessage("");
@@ -103,11 +117,11 @@ export default function PlanComparison({ id, extension, analysis, alignment, con
         <div className="bt-segment"><button aria-label="تكبير المقارنة" onClick={() => setZoom(v => Math.min(3, v + .5))}>+</button><button aria-label="تصغير المقارنة" onClick={() => setZoom(v => Math.max(1, v - .5))}>−</button><button onClick={() => setZoom(1)}>ضبط</button></div>
         <span className="bt-comparison-legend"><i />BIMy <i />Tectly</span>
       </div>
-      <div className="bt-comparison-counts"><span>القراءة الإضافية: <b>{plan.walls.length}</b> جدار · <b>{plan.openings.filter(o => o.kind === "door").length}</b> باب · <b>{plan.openings.filter(o => o.kind === "window").length}</b> نافذة · <b>{plan.rooms.length}</b> مساحة</span><small>الأعداد للمراجعة؛ صحة الموضع أهم من زيادة العدد.</small></div>
+      <div className="bt-comparison-counts">{walls.length > 0 && <span>المحفوظ في منزلي و3D: <b>{currentOpenings.filter(o => o.kind === "door").length}</b> باب · <b>{currentOpenings.filter(o => o.kind === "window").length}</b> نافذة</span>}<span>القراءة الإضافية: <b>{plan.walls.length}</b> جدار · <b>{plan.openings.filter(o => o.kind === "door").length}</b> باب · <b>{plan.openings.filter(o => o.kind === "window").length}</b> نافذة · <b>{plan.rooms.length}</b> مساحة</span><small>الأعداد للمراجعة؛ صحة الموضع أهم من زيادة العدد.</small></div>
       <div className="bt-comparison-canvas"><svg viewBox={`0 0 ${width} ${height}`} style={{ width: `${zoom * 100}%`, maxWidth: "none" }} aria-label="مقارنة القراءتين فوق المخطط">
         {raster && <image href={image} width={width} height={height} opacity=".7" />}
         {canAlign && layer !== "tectly" && walls.map((wall: any) => { const a = currentPoint(wall.x1, wall.y1), b = currentPoint(wall.x2, wall.y2); return <line key={wall.entityId} x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} stroke="#4b543e" strokeWidth={3} vectorEffect="non-scaling-stroke" />; })}
-        {canAlign && layer !== "tectly" && (analysis.ifcPlan.openings || []).map((o: any, i: number) => { const w = walls.find((w: any) => w.entityId === o.wallEntityId); if (!w) return null; const p = currentPoint(w.x1 + (w.x2-w.x1)*o.position, w.y1 + (w.y2-w.y1)*o.position); return <circle key={i} cx={p[0]} cy={p[1]} r={width*.006} fill="#4b543e" stroke="white" />; })}
+        {canAlign && layer !== "tectly" && currentOpenings.map((o: any, i: number) => { const w = walls.find((w: any) => w.entityId === o.wallEntityId); if (!w) return null; const p = currentPoint(w.x1 + (w.x2-w.x1)*o.position, w.y1 + (w.y2-w.y1)*o.position); return <circle key={i} cx={p[0]} cy={p[1]} r={width*.006} fill="#4b543e" stroke="white" />; })}
         {(!canAlign || layer !== "bimy") && <>
           {plan.rooms.map(room => { const points = room.boundary.map(tectlyPoint); const cx = points.reduce((v, p) => v + p[0], 0) / points.length, cy = points.reduce((v, p) => v + p[1], 0) / points.length; const choose = () => { setSelected({ kind: "room", id: room.id, label: roomLabel(room) + (room.caption ? "" : " (تصنيف)") }); setError(""); setMessage(""); }; return <g key={room.id} tabIndex={0} role="button" aria-label={`مراجعة اسم ${roomLabel(room)}`} onClick={choose} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); choose(); } }}><polygon points={points.map(p => p.join(",")).join(" ")} fill={selected?.id === room.id ? "#37779735" : "#3777970a"} /><text x={cx} y={cy} fontSize={width*.015} textAnchor="middle" fill="#19445d" stroke="white" strokeWidth={width*.003} paintOrder="stroke">{roomLabel(room)}</text></g>; })}
           {plan.walls.map(wall => <polygon key={wall.id} points={wall.boundary.map(tectlyPoint).map(p => p.join(",")).join(" ")} fill="#37779724" stroke="#377797" strokeWidth={1.3} vectorEffect="non-scaling-stroke" pointerEvents="none" />)}
@@ -116,6 +130,11 @@ export default function PlanComparison({ id, extension, analysis, alignment, con
       </svg></div>
       {plan.warnings.map((warning, i) => <p className="bt-muted" key={i}>{warning}</p>)}
       {canAlign ? <label className="bt-comparison-check"><input type="checkbox" checked={aligned} onChange={e => setAligned(e.target.checked)} />راجعت الجدران الحالية وتأكدت من تطابقها مع صورة المخطط.</label> : <p className="bt-muted">{raster ? "أكمل قراءة المخطط الحالية ومحاذاته أولًا لتتمكن من اعتماد العناصر في 3D." : "هذه معاينة مستقلة لصفحة PDF. نقل العناصر إلى النموذج متاح للصور حاليًا."}</p>}
+      <div className="bt-comparison-start">
+        <p>ادمج العناصر الناقصة في مخططك و3D. نحافظ على الفتحات الحالية، ونترك اختلاف النوع أو العرض للمراجعة. يستخدم الدمج النتائج المحفوظة دون إرسال قراءة جديدة.</p>
+        <button className="bt-button" disabled={!canAlign || !aligned || busy} onClick={fuse}>{busy ? "نعالج الطلب…" : "دمج القراءتين في منزلي"}</button>
+        {!!fusionReview.length && <details><summary>{fusionReview.length} عنصر يحتاج مراجعة</summary><ul>{fusionReview.map((item, i) => <li key={item.id}><button className="bt-text-button" onClick={() => { const opening = plan.openings.find(o => o.id === item.id); if (opening) setSelected({ kind: "opening", id: item.id, label: opening.kind === "door" ? "باب" : "نافذة" }); }}>{i + 1}. {item.reason}</button></li>)}</ul></details>}
+      </div>
       {selected ? <div className="bt-comparison-selection"><div><b>{selected.label}</b><p>{selected.kind === "room" ? "اعتماد الاسم ينقله إلى المساحة المطابقة في مخططك." : "سنتحقق من تطابق الفتحة مع الجدار قبل حفظها. الموضع المتداخل سيُعامل كتصحيح."}</p></div><button className="bt-button" disabled={!canAlign || !aligned || busy} onClick={adopt}>{busy ? "نحفظ…" : selected.kind === "room" ? "اعتماد الاسم" : "اعتماد الفتحة"}</button><button className="bt-text-button" onClick={() => setSelected(null)}>إلغاء</button></div> : <p className="bt-muted">اضغط على فتحة أو اسم غرفة في القراءة الإضافية لمراجعته واعتماده.</p>}
     </>}
   </section>;

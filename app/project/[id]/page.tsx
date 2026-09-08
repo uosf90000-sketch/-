@@ -321,7 +321,7 @@ export default function PlanPage() {
                 </a>
               </aside>
             </div>
-            <PlanComparison id={id} extension={upload.extension} analysis={analysis} alignment={alignment} configured={health?.tectlyConfigured === true} onReviewSaved={setReview} />
+            <PlanComparison currentOpenings={openings} id={id} extension={upload.extension} analysis={analysis} alignment={alignment} configured={health?.tectlyConfigured === true} onReviewSaved={setReview} />
           </>
         )}
       </main>
